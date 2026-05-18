@@ -1,0 +1,355 @@
+@import "tailwindcss";
+
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  --bg-primary: #0a0e1a;
+  --bg-secondary: #0d1120;
+  --bg-panel: #111827;
+  --bg-card: #161d2e;
+  --bg-card-hover: #1a2236;
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-medium: rgba(255, 255, 255, 0.12);
+  --text-primary: #f0f4ff;
+  --text-secondary: #8b9cc8;
+  --text-muted: #4a5578;
+  --accent-cyan: #00ffff;
+  --accent-green: #39ff14;
+  --accent-pink: #ff10f0;
+  --accent-orange: #ffa500;
+  --accent-blue: #1e90ff;
+  --accent-purple: #b400ff;
+}
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Neon glow animations */
+@keyframes orbPulse {
+  0%, 100% { 
+    filter: drop-shadow(0 0 20px rgba(0, 220, 255, 0.8)) drop-shadow(0 0 40px rgba(0, 220, 255, 0.4));
+    transform: scale(1);
+  }
+  50% { 
+    filter: drop-shadow(0 0 35px rgba(0, 220, 255, 1)) drop-shadow(0 0 70px rgba(0, 220, 255, 0.6));
+    transform: scale(1.04);
+  }
+}
+
+@keyframes orbPulseBright {
+  0% { transform: scale(1); filter: drop-shadow(0 0 20px rgba(0, 220, 255, 0.8)); }
+  50% { transform: scale(1.12); filter: drop-shadow(0 0 60px rgba(0, 220, 255, 1)) drop-shadow(0 0 100px rgba(0, 220, 255, 0.8)); }
+  100% { transform: scale(1); filter: drop-shadow(0 0 20px rgba(0, 220, 255, 0.8)); }
+}
+
+@keyframes flowerAppear {
+  0% { opacity: 0; transform: scale(0.2) rotate(-30deg); }
+  60% { opacity: 1; transform: scale(1.08) rotate(5deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+
+@keyframes petalDelete {
+  0% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0); }
+}
+
+@keyframes vineGrow {
+  from { stroke-dashoffset: 1000; }
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes reasoningLine {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes harvestSlide {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes expandPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 255, 255, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(0, 255, 255, 0); }
+}
+
+@keyframes rebalancingFade {
+  0% { opacity: 0; }
+  20% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes borderGlow {
+  0%, 100% { box-shadow: 0 0 8px rgba(0, 220, 255, 0.3), inset 0 0 8px rgba(0, 220, 255, 0.05); }
+  50% { box-shadow: 0 0 16px rgba(0, 220, 255, 0.6), inset 0 0 12px rgba(0, 220, 255, 0.1); }
+}
+
+.orb-pulse {
+  animation: orbPulse 3s ease-in-out infinite;
+}
+
+.orb-pulse-bright {
+  animation: orbPulseBright 0.8s ease-in-out;
+}
+
+.flower-appear {
+  animation: flowerAppear 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.petal-delete {
+  animation: petalDelete 0.3s ease-out forwards;
+}
+
+.reasoning-line {
+  animation: reasoningLine 0.4s ease-out forwards;
+}
+
+.harvest-slide {
+  animation: harvestSlide 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.expand-pulse {
+  animation: expandPulse 2s ease-in-out infinite;
+}
+
+.rebalancing-overlay {
+  animation: rebalancingFade 2s ease-in-out forwards;
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+.slide-up {
+  animation: slideUp 0.4s ease-out forwards;
+}
+
+/* Canvas root system background pattern */
+.canvas-bg {
+  background-color: #080d18;
+  background-image: 
+    radial-gradient(ellipse at 50% 50%, rgba(0, 80, 120, 0.08) 0%, transparent 70%),
+    radial-gradient(circle at 25% 25%, rgba(0, 255, 255, 0.015) 0%, transparent 50%),
+    radial-gradient(circle at 75% 75%, rgba(180, 0, 255, 0.015) 0%, transparent 50%);
+}
+
+/* Vine glow effect */
+.vine-glow {
+  filter: drop-shadow(0 0 3px currentColor) drop-shadow(0 0 6px currentColor);
+}
+
+/* Panel glass effect */
+.panel-glass {
+  background: rgba(13, 17, 32, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Neon text */
+.neon-cyan { 
+  color: #00ffff; 
+  text-shadow: 0 0 10px rgba(0, 255, 255, 0.6);
+}
+.neon-green { 
+  color: #39ff14; 
+  text-shadow: 0 0 10px rgba(57, 255, 20, 0.6);
+}
+.neon-pink { 
+  color: #ff10f0; 
+  text-shadow: 0 0 10px rgba(255, 16, 240, 0.6);
+}
+
+/* Slider custom styling */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 2px solid #080d18;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+/* Tooltip */
+.tooltip-card {
+  background: rgba(13, 17, 32, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(16px);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+/* Highlighted text in reasoning */
+.highlight-text {
+  background: linear-gradient(135deg, rgba(0, 255, 255, 0.2), rgba(0, 255, 255, 0.1));
+  color: #00ffff;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+/* Card hover */
+.harvest-card {
+  transition: all 0.25s ease;
+}
+.harvest-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+/* Toggle switch */
+.toggle-switch {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: white;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Loading shimmer */
+.loading-shimmer {
+  background: linear-gradient(90deg, #1a2236 25%, #232f48 50%, #1a2236 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Flower node styling */
+.flower-node {
+  cursor: pointer;
+  transition: filter 0.2s, transform 0.2s;
+}
+
+.flower-node:hover {
+  filter: brightness(1.3);
+}
+
+/* Grid overlay for canvas */
+.canvas-grid {
+  background-image: 
+    radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Truncate long text */
+.truncate-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Panel transition */
+.panel-transition {
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+}
+
+/* Harvest tab */
+.harvest-tab {
+  position: relative;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.2s;
+  white-space: nowrap;
+}
+
+.harvest-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #00ffff, #00bcd4);
+  border-radius: 1px 1px 0 0;
+}
+
+/* Orb ring animation */
+@keyframes orbRing {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes orbRingReverse {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+
+.orb-ring-1 { animation: orbRing 8s linear infinite; }
+.orb-ring-2 { animation: orbRingReverse 12s linear infinite; }
+.orb-ring-3 { animation: orbRing 16s linear infinite; }
