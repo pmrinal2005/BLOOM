@@ -37,8 +37,6 @@ export default function App() {
   const runGeneration = useCallback(
     async (incorporateExisting = false) => {
       if (generationRef.current) return;
-
-      // Guard: do not run if no problem description
       const currentDescription = useStore.getState().problemDescription;
       if (!currentDescription.trim()) return;
 
@@ -75,38 +73,31 @@ export default function App() {
 
         triggerOrbPulse();
 
-        // Position flowers
         const positioned = assignPositions(
           incorporateExisting ? [...flowers, ...result.flowers] : result.flowers,
           compactView
         );
 
-        // Track new flower IDs for animation
         const newIds = new Set(result.flowers.map((f) => f.id));
         setNewFlowerIds(newIds);
 
         if (!incorporateExisting) {
           setFlowers([]);
           setConnections([]);
-
-          // Add flowers one by one with delay
           for (let i = 0; i < positioned.length; i++) {
             await new Promise((r) => setTimeout(r, 180));
-            const flower = positioned[i];
-            addFlower(flower);
+            addFlower(positioned[i]);
           }
         } else {
           setFlowers(positioned);
         }
 
-        // Add connections
         for (const conn of result.connections) {
           await new Promise((r) => setTimeout(r, 100));
           addConnection(conn);
         }
 
         setHarvestResults(result.harvestResults);
-
         await new Promise((r) => setTimeout(r, 600));
         setHarvestVisible(true);
         setGenerationStatus('success');
@@ -118,55 +109,30 @@ export default function App() {
       }
     },
     [
-      problemUpload,
-      inspirationUploads,
-      problemDescription,
-      flowers,
-      growthMode,
-      modelParams,
-      creativityLevel,
-      projectId,
-      compactView,
-      addFlower,
-      addConnection,
-      setFlowers,
-      setConnections,
-      addReasoningLog,
-      clearReasoningLogs,
-      setHarvestResults,
-      setHarvestVisible,
-      setGenerationStatus,
-      setErrorMessage,
-      triggerOrbPulse,
+      problemUpload, inspirationUploads, problemDescription, flowers,
+      growthMode, modelParams, creativityLevel, projectId, compactView,
+      addFlower, addConnection, setFlowers, setConnections,
+      addReasoningLog, clearReasoningLogs, setHarvestResults, setHarvestVisible,
+      setGenerationStatus, setErrorMessage, triggerOrbPulse,
     ]
   );
 
-  const handleStartGrowth = useCallback(() => {
-    runGeneration(false);
-  }, [runGeneration]);
-
-  const handleRegenerate = useCallback(() => {
-    runGeneration(true);
-  }, [runGeneration]);
+  const handleStartGrowth = useCallback(() => runGeneration(false), [runGeneration]);
+  const handleRegenerate = useCallback(() => runGeneration(true), [runGeneration]);
 
   const handleDeletePetal = useCallback(
     async (flowerId: string, petalId: string) => {
       const flower = flowers.find((f) => f.id === flowerId);
       if (!flower) return;
-
       setDeletingPetalId(petalId);
       await new Promise((r) => setTimeout(r, 350));
-
       removePetal(flowerId, petalId);
       setDeletingPetalId(null);
-
       const remainingPetals = flower.petals.filter((p) => p.id !== petalId);
-
       if (remainingPetals.length === 0) {
         handleDeleteFlower(flowerId);
         return;
       }
-
       const { addReasoningLog } = useStore.getState();
       addReasoningLog({
         id: `reason-regen-${Date.now()}`,
@@ -176,7 +142,6 @@ export default function App() {
         highlighted_phrases: [flower.entity_name],
         created_at: new Date().toISOString(),
       });
-
       setTimeout(() => runGeneration(true), 500);
     },
     [flowers, projectId, removePetal, setDeletingPetalId, runGeneration]
@@ -186,13 +151,10 @@ export default function App() {
     async (flowerId: string) => {
       const flower = flowers.find((f) => f.id === flowerId);
       if (!flower) return;
-
       setDeletingFlowerId(flowerId);
       await new Promise((r) => setTimeout(r, 600));
-
       removeFlower(flowerId);
       setDeletingFlowerId(null);
-
       const { flowers: currentFlowers } = useStore.getState();
       if (currentFlowers.length === 0) {
         setHarvestVisible(false);
@@ -200,7 +162,6 @@ export default function App() {
         clearReasoningLogs();
         return;
       }
-
       const { addReasoningLog } = useStore.getState();
       addReasoningLog({
         id: `reason-del-${Date.now()}`,
@@ -210,24 +171,12 @@ export default function App() {
         highlighted_phrases: [flower.entity_name],
         created_at: new Date().toISOString(),
       });
-
       setRebalancing(true);
       await new Promise((r) => setTimeout(r, 1500));
       setRebalancing(false);
-
       setTimeout(() => runGeneration(true), 200);
     },
-    [
-      flowers,
-      projectId,
-      removeFlower,
-      setDeletingFlowerId,
-      setRebalancing,
-      runGeneration,
-      setHarvestVisible,
-      setGenerationStatus,
-      clearReasoningLogs,
-    ]
+    [flowers, projectId, removeFlower, setDeletingFlowerId, setRebalancing, runGeneration, setHarvestVisible, setGenerationStatus, clearReasoningLogs]
   );
 
   const handleReplantInsight = useCallback(
@@ -246,17 +195,60 @@ export default function App() {
     [projectId, runGeneration]
   );
 
+  // Point 11.4: Manual connection triggers AI regeneration
+  const handleManualConnect = useCallback(
+    async (
+      sourceType: 'orb' | 'flower',
+      sourceId: string,
+      targetType: 'orb' | 'flower',
+      targetId: string,
+    ) => {
+      // Don't create duplicate connections
+      const { connections: currentConns, addConnection, addReasoningLog, flowers: currentFlowers } = useStore.getState();
+      const alreadyExists = currentConns.some(
+        c => (c.source_id === sourceId && c.target_id === targetId) ||
+             (c.source_id === targetId && c.target_id === sourceId)
+      );
+      if (alreadyExists) return;
+
+      // Determine the actual target — must be a flower
+      // If user connected orb→flower or flower→flower
+      const actualTargetId = targetType === 'orb' ? sourceId : targetId;
+      const actualSourceId = targetType === 'orb' ? targetId : sourceId;
+      const actualSourceType = targetType === 'orb' ? 'flower' : sourceType;
+
+      const newConn = {
+        id: `conn-manual-${Date.now()}`,
+        project_id: projectId,
+        source_type: actualSourceType as 'orb' | 'flower',
+        source_id: actualSourceType === 'orb' ? 'orb' : actualSourceId,
+        target_type: 'flower' as const,
+        target_id: actualTargetId,
+        relationship_description: 'Manual connection',
+        created_at: new Date().toISOString(),
+      };
+      addConnection(newConn);
+
+      // Log and trigger regeneration
+      addReasoningLog({
+        id: `reason-manual-conn-${Date.now()}`,
+        project_id: projectId,
+        step_number: useStore.getState().reasoningLogs.length + 1,
+        text_content: `New manual connection created. Regenerating garden with updated relationships…`,
+        highlighted_phrases: ['manual connection'],
+        created_at: new Date().toISOString(),
+      });
+
+      setTimeout(() => runGeneration(true), 400);
+    },
+    [projectId, runGeneration]
+  );
+
   return (
     <div className="flex flex-col w-full h-full" style={{ background: '#080d18' }}>
-      {/* Fixed header */}
       <Header />
-
-      {/* Main layout below header */}
       <div className="flex flex-1 overflow-hidden" style={{ marginTop: 56 }}>
-        {/* Left panel */}
         <LeftPanel />
-
-        {/* Center: Canvas + bottom bar + harvest */}
         <div className="flex-1 flex flex-col overflow-hidden relative">
           {/* Top action bar */}
           <div
@@ -268,57 +260,38 @@ export default function App() {
             }}
           >
             <div className="flex items-center gap-3">
-              <div
-                className="flex items-center gap-2 text-xs"
-                style={{ color: 'rgba(255,255,255,0.35)' }}
-              >
+              <div className="flex items-center gap-2 text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>
                 <div
                   className="w-1.5 h-1.5 rounded-full"
                   style={{
-                    background:
-                      flowers.length > 0 ? '#39ff14' : 'rgba(255,255,255,0.15)',
+                    background: flowers.length > 0 ? '#39ff14' : 'rgba(255,255,255,0.15)',
                     boxShadow: flowers.length > 0 ? '0 0 6px #39ff14' : 'none',
                   }}
                 />
                 {flowers.length > 0
-                  ? `${flowers.length} flowers · ${flowers.reduce(
-                      (acc, f) => acc + f.petals.length,
-                      0
-                    )} petals`
+                  ? `${flowers.length} flowers · ${flowers.reduce((acc, f) => acc + f.petals.length, 0)} petals`
                   : 'Garden empty'}
               </div>
             </div>
             <StartGrowthButton onStart={handleStartGrowth} />
-            <div
-              className="flex items-center gap-2 text-xs"
-              style={{ color: 'rgba(255,255,255,0.25)' }}
-            >
-              {generationStatus === 'loading' && (
-                <span style={{ color: 'rgba(0,220,255,0.6)' }}>⟳ Processing...</span>
-              )}
-              {generationStatus === 'success' && flowers.length > 0 && (
-                <span style={{ color: 'rgba(57,255,20,0.6)' }}>✓ Growth complete</span>
-              )}
-              {generationStatus === 'error' && (
-                <span style={{ color: 'rgba(255,100,100,0.7)' }}>✕ Error</span>
-              )}
+            <div className="flex items-center gap-2 text-xs" style={{ color: 'rgba(255,255,255,0.25)' }}>
+              {generationStatus === 'loading' && <span style={{ color: 'rgba(0,220,255,0.6)' }}>⟳ Processing...</span>}
+              {generationStatus === 'success' && flowers.length > 0 && <span style={{ color: 'rgba(57,255,20,0.6)' }}>✓ Growth complete</span>}
+              {generationStatus === 'error' && <span style={{ color: 'rgba(255,100,100,0.7)' }}>✕ Error</span>}
             </div>
           </div>
 
-          {/* Canvas */}
+          {/* Canvas + Harvest */}
           <div className="flex-1 relative overflow-hidden">
             <Canvas
               onDeletePetal={handleDeletePetal}
               onDeleteFlower={handleDeleteFlower}
+              onManualConnect={handleManualConnect}
               pulseBright={pulseBright}
             />
-
-            {/* Harvest panel overlays canvas bottom */}
             <HarvestPanel onReplant={handleReplantInsight} />
           </div>
         </div>
-
-        {/* Right panel */}
         <RightPanel onRegenerate={handleRegenerate} />
       </div>
     </div>

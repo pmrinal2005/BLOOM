@@ -8,9 +8,18 @@ interface Props {
   isHovered: boolean;
   isDeleting: boolean;
   onHover: (id: string | null) => void;
+  // orbPulsePhase: 0..1, driven by CentralOrb heartbeat — triggers energy wave
+  orbPulsePhase?: number;
 }
 
-export default function VineConnection({ connection, flowers, isHovered, isDeleting, onHover }: Props) {
+export default function VineConnection({
+  connection,
+  flowers,
+  isHovered,
+  isDeleting,
+  onHover,
+  orbPulsePhase = 0,
+}: Props) {
   const [drawn, setDrawn] = useState(false);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
   const pathRef = useRef<SVGPathElement>(null);
@@ -20,20 +29,18 @@ export default function VineConnection({ connection, flowers, isHovered, isDelet
     return () => clearTimeout(t);
   }, []);
 
-  // Get source and target coordinates
-  let x1 = 0, y1 = 0;
-  let x2 = 0, y2 = 0;
+  let x1 = 0, y1 = 0, x2 = 0, y2 = 0;
+  let sourceColor = 'cyan';
   let targetColor = 'cyan';
 
   if (connection.source_type === 'orb') {
-    x1 = 0;
-    y1 = 0;
+    x1 = 0; y1 = 0;
   } else {
     const srcFlower = flowers.find(f => f.id === connection.source_id);
     if (!srcFlower) return null;
     x1 = srcFlower.position_x;
     y1 = srcFlower.position_y;
-    targetColor = srcFlower.color_theme;
+    sourceColor = srcFlower.color_theme;
   }
 
   const tgtFlower = flowers.find(f => f.id === connection.target_id);
@@ -43,38 +50,48 @@ export default function VineConnection({ connection, flowers, isHovered, isDelet
   targetColor = tgtFlower.color_theme;
 
   const color = getColorConfig(targetColor);
+  const srcColorCfg = getColorConfig(connection.source_type === 'orb' ? 'cyan' : sourceColor);
   const pathD = cubicBezierPath(x1, y1, x2, y2);
-
-  // Estimate path length for dash animation
   const pathLength = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2) * 1.2;
   const isCircular = connection.source_type === 'flower';
+  const strokeWidth = isHovered ? 2.4 : isCircular ? 1.3 : 1.6;
+
+  // Point 9: energy pulse — animate stroke-dashoffset to create conveyor belt for dotted,
+  // and a brightness wave for solid lines.
+  // For dotted (flower→flower): continuously offset dasharray
+  // For solid (orb→flower): pulse opacity tied to orbPulsePhase
 
   const handleMouseMove = (e: React.MouseEvent<SVGPathElement>) => {
     const svg = (e.target as SVGPathElement).ownerSVGElement;
     if (!svg) return;
     const pt = svg.createSVGPoint();
-    pt.x = e.clientX;
-    pt.y = e.clientY;
+    pt.x = e.clientX; pt.y = e.clientY;
     const svgPt = pt.matrixTransform(svg.getScreenCTM()?.inverse());
     setTooltipPos({ x: svgPt.x, y: svgPt.y });
   };
 
-  const strokeWidth = isHovered ? 2.2 : isCircular ? 1.2 : 1.5;
+  const gradId = `vineGrad-${connection.id}`;
+  const glowId = `vineGlow-${connection.id}`;
+
+  // Energy wave opacity for solid orb→flower connections
+  const energyOpacity = connection.source_type === 'orb'
+    ? 0.3 + Math.sin(orbPulsePhase * Math.PI * 2) * 0.5
+    : 0.3;
 
   return (
     <g>
       <defs>
         <linearGradient
-          id={`vineGrad-${connection.id}`}
+          id={gradId}
           x1={`${x1}`} y1={`${y1}`}
           x2={`${x2}`} y2={`${y2}`}
           gradientUnits="userSpaceOnUse"
         >
-          <stop offset="0%" stopColor={connection.source_type === 'orb' ? '#00dcff' : color.stroke} stopOpacity={0.3} />
-          <stop offset="50%" stopColor={color.stroke} stopOpacity={isHovered ? 0.9 : 0.6} />
-          <stop offset="100%" stopColor={color.stroke} stopOpacity={isHovered ? 0.7 : 0.4} />
+          <stop offset="0%" stopColor={connection.source_type === 'orb' ? '#00dcff' : srcColorCfg.stroke} stopOpacity={0.35} />
+          <stop offset="50%" stopColor={color.stroke} stopOpacity={isHovered ? 0.95 : 0.65} />
+          <stop offset="100%" stopColor={color.stroke} stopOpacity={isHovered ? 0.75 : 0.45} />
         </linearGradient>
-        <filter id={`vineGlow-${connection.id}`}>
+        <filter id={glowId}>
           <feGaussianBlur in="SourceGraphic" stdDeviation={isHovered ? 2.5 : 1.5} result="blur" />
           <feMerge>
             <feMergeNode in="blur" />
@@ -83,19 +100,18 @@ export default function VineConnection({ connection, flowers, isHovered, isDelet
         </filter>
       </defs>
 
-      {/* Glow background path */}
+      {/* Glow background */}
       <path
         d={pathD}
         fill="none"
-        stroke={`url(#vineGrad-${connection.id})`}
+        stroke={`url(#${gradId})`}
         strokeWidth={strokeWidth + 2}
         strokeLinecap="round"
-        opacity={0.3}
         style={{
           filter: `blur(${isHovered ? 3 : 2}px)`,
-          opacity: isDeleting ? 0 : 0.3,
-          transition: 'opacity 0.5s ease',
-          strokeDasharray: drawn ? undefined : pathLength,
+          opacity: isDeleting ? 0 : energyOpacity,
+          transition: 'opacity 0.1s',
+          strokeDasharray: drawn ? undefined : `${pathLength}`,
           strokeDashoffset: drawn ? 0 : pathLength,
         }}
       />
@@ -105,30 +121,48 @@ export default function VineConnection({ connection, flowers, isHovered, isDelet
         ref={pathRef}
         d={pathD}
         fill="none"
-        stroke={`url(#vineGrad-${connection.id})`}
+        stroke={`url(#${gradId})`}
         strokeWidth={strokeWidth}
         strokeLinecap="round"
-        strokeDasharray={isCircular ? '5 8' : undefined}
         style={{
           opacity: isDeleting ? 0 : 1,
           transition: 'opacity 0.5s ease, stroke-width 0.2s',
-          strokeDasharray: drawn ? (isCircular ? '5 8' : undefined) : `${pathLength}`,
-          strokeDashoffset: drawn ? 0 : pathLength,
+          // Point 9 dotted conveyor belt: dashoffset animated in CSS via keyframe
+          strokeDasharray: drawn
+            ? (isCircular ? '6 9' : undefined)
+            : `${pathLength}`,
+          strokeDashoffset: drawn ? (isCircular ? undefined : 0) : pathLength,
+          animation: drawn && isCircular ? `conveyorBelt 2s linear infinite` : undefined,
         }}
-        filter={`url(#vineGlow-${connection.id})`}
+        filter={`url(#${glowId})`}
         onMouseEnter={() => onHover(connection.id)}
         onMouseLeave={() => { onHover(null); setTooltipPos(null); }}
         onMouseMove={handleMouseMove}
       />
 
-      {/* Animated particles along vine */}
+      {/* Point 9: Energy wave particle for solid orb→flower lines */}
+      {drawn && connection.source_type === 'orb' && (
+        <>
+          <circle r={3} fill="#00dcff" opacity={0.9}>
+            <animateMotion dur="1.8s" repeatCount="indefinite" path={pathD} />
+          </circle>
+          <circle r={1.8} fill="#00ffff" opacity={0.6}>
+            <animateMotion dur="1.8s" begin="0.6s" repeatCount="indefinite" path={pathD} />
+          </circle>
+          <circle r={1.2} fill="#ffffff" opacity={0.4}>
+            <animateMotion dur="1.8s" begin="1.2s" repeatCount="indefinite" path={pathD} />
+          </circle>
+        </>
+      )}
+
+      {/* Hover particles for any connection */}
       {drawn && isHovered && (
         <>
           <circle r={2.5} fill={color.stroke} opacity={0.9}>
-            <animateMotion dur="2s" repeatCount="indefinite" path={pathD} />
+            <animateMotion dur="1.5s" repeatCount="indefinite" path={pathD} />
           </circle>
           <circle r={1.5} fill={color.stroke} opacity={0.6}>
-            <animateMotion dur="2s" begin="0.7s" repeatCount="indefinite" path={pathD} />
+            <animateMotion dur="1.5s" begin="0.5s" repeatCount="indefinite" path={pathD} />
           </circle>
         </>
       )}
@@ -146,7 +180,7 @@ export default function VineConnection({ connection, flowers, isHovered, isDelet
           </text>
           <text x={tooltipPos.x + 20} y={tooltipPos.y + 2}
             style={{ fill: color.text, fontSize: 8.5, fontFamily: 'Inter, sans-serif' }}>
-            {connection.source_type === 'orb' ? 'Core Soul' : connection.source_id} → {tgtFlower.entity_name.slice(0, 18)}
+            {connection.source_type === 'orb' ? 'Core Soul' : '→'} → {tgtFlower.entity_name.slice(0, 18)}
           </text>
         </g>
       )}

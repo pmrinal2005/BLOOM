@@ -82,42 +82,36 @@ export interface RecentProject {
   thumbnail?: string;
 }
 
+// Manual connection drag state
+export interface DraggingConnection {
+  sourceType: 'orb' | 'flower';
+  sourceId: string;
+  sourceX: number;
+  sourceY: number;
+  cursorX: number;
+  cursorY: number;
+  snapTargetId: string | null; // flower id or 'orb'
+}
+
 interface AppState {
-  // Project
   projectId: string;
   projectName: string;
-
-  // Growth mode
   growthMode: GrowthMode;
   creativityLevel: number;
   showReasoning: boolean;
-
-  // Model params
   modelParams: ModelParams;
   pendingParamChange: boolean;
-
-  // Uploads
   uploads: Upload[];
   problemUpload: Upload | null;
   inspirationUploads: (Upload | null)[];
-
-  // Problem description text
   problemDescription: string;
-
-  // Canvas data
   flowers: Flower[];
   connections: Connection[];
-
-  // Reasoning
   reasoningLogs: ReasoningLog[];
   reasoningExpanded: boolean;
-
-  // Harvest
   harvestResults: HarvestResult[];
   harvestVisible: boolean;
   activeHarvestTab: HarvestResult['tab_type'];
-
-  // UI State
   generationStatus: GenerationStatus;
   errorMessage: string;
   leftPanelOpen: boolean;
@@ -137,8 +131,9 @@ interface AppState {
   reasoningModalOpen: boolean;
   generationQueue: number;
   compactView: boolean;
+  // Manual connection dragging
+  draggingConnection: DraggingConnection | null;
 
-  // Actions
   setGrowthMode: (mode: GrowthMode) => void;
   setCreativityLevel: (level: number) => void;
   setShowReasoning: (show: boolean) => void;
@@ -182,16 +177,15 @@ interface AppState {
   setCompactView: (v: boolean) => void;
   setPendingParamChange: (v: boolean) => void;
   setProjectName: (name: string) => void;
+  setDraggingConnection: (dc: DraggingConnection | null) => void;
 }
 
 export const useStore = create<AppState>((set) => ({
   projectId: `proj-${Date.now()}`,
   projectName: 'Untitled Garden',
-
   growthMode: 'Focused',
   creativityLevel: 0.7,
   showReasoning: true,
-
   modelParams: {
     temperature: 0.8,
     top_p: 0.9,
@@ -200,23 +194,17 @@ export const useStore = create<AppState>((set) => ({
     frequency_penalty: 0.3,
   },
   pendingParamChange: false,
-
   uploads: [],
   problemUpload: null,
   inspirationUploads: [null, null, null, null],
-
   problemDescription: '',
-
   flowers: [],
   connections: [],
-
   reasoningLogs: [],
   reasoningExpanded: false,
-
   harvestResults: [],
   harvestVisible: false,
   activeHarvestTab: 'Core Insights',
-
   generationStatus: 'idle',
   errorMessage: '',
   leftPanelOpen: true,
@@ -236,6 +224,7 @@ export const useStore = create<AppState>((set) => ({
   reasoningModalOpen: false,
   generationQueue: 0,
   compactView: false,
+  draggingConnection: null,
 
   setGrowthMode: (mode) => set({ growthMode: mode }),
   setCreativityLevel: (level) => set({ creativityLevel: level }),
@@ -330,4 +319,5 @@ export const useStore = create<AppState>((set) => ({
   decrementQueue: () => set((state) => ({ generationQueue: Math.max(0, state.generationQueue - 1) })),
   setCompactView: (v) => set({ compactView: v }),
   setProjectName: (name) => set({ projectName: name }),
+  setDraggingConnection: (dc) => set({ draggingConnection: dc }),
 }));
