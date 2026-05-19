@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, useEffect } from 'react';
 import { useStore } from './store/useStore';
 import Header from './components/Header';
 import LeftPanel from './components/LeftPanel';
@@ -23,11 +23,54 @@ export default function App() {
     setDeletingFlowerId, setDeletingPetalId,
     setRebalancing,
     compactView,
+    harvestVisible,
+    harvestHeight,
   } = useStore();
 
   const [pulseBright, setPulseBright] = useState(false);
   const generationRef = useRef(false);
   const [newFlowerIds, setNewFlowerIds] = useState<Set<string>>(new Set());
+
+  // ── Measure actual harvest panel height for toolbar offset ──
+  // We observe the canvas container's bottom child (HarvestPanel) via
+  // a sentinel div that sits at the bottom of the relative canvas wrapper.
+  // The harvest panel itself remains absolute-positioned (unchanged).
+  const [harvestPanelHeightPx, setHarvestPanelHeightPx] = useState(0);
+  const canvasWrapperRef = useRef<HTMLDivElement>(null);
+
+  // Recompute panel height whenever harvestVisible, harvestHeight, or
+  // minimized state changes. We measure the actual DOM height of the
+  // harvest panel element by querying it from the canvas wrapper.
+  useEffect(() => {
+    const computeHeight = () => {
+      if (!canvasWrapperRef.current) return;
+      // The HarvestPanel renders as absolute bottom-0 inside canvasWrapperRef
+      // Query it by its known data attribute
+      const panel = canvasWrapperRef.current.querySelector<HTMLElement>(
+        '[data-harvest-panel]'
+      );
+      if (panel) {
+        setHarvestPanelHeightPx(panel.getBoundingClientRect().height);
+      } else {
+        setHarvestPanelHeightPx(0);
+      }
+    };
+
+    computeHeight();
+
+    // Use ResizeObserver on the whole canvas wrapper to catch panel
+    // resize/minimize events
+    const ro = new ResizeObserver(computeHeight);
+    if (canvasWrapperRef.current) ro.observe(canvasWrapperRef.current);
+
+    // Also re-measure on a short interval to catch minimize animation end
+    const interval = setInterval(computeHeight, 150);
+
+    return () => {
+      ro.disconnect();
+      clearInterval(interval);
+    };
+  }, [harvestVisible, harvestHeight]);
 
   const triggerOrbPulse = useCallback(() => {
     setPulseBright(true);
@@ -60,9 +103,7 @@ export default function App() {
             creativityLevel,
             projectId,
           },
-          (log: ReasoningLog) => {
-            addReasoningLog(log);
-          }
+          (log: ReasoningLog) => addReasoningLog(log)
         );
 
         if (!result.flowers.length) {
@@ -133,8 +174,7 @@ export default function App() {
         handleDeleteFlower(flowerId);
         return;
       }
-      const { addReasoningLog } = useStore.getState();
-      addReasoningLog({
+      useStore.getState().addReasoningLog({
         id: `reason-regen-${Date.now()}`,
         project_id: projectId,
         step_number: useStore.getState().reasoningLogs.length + 1,
@@ -162,8 +202,7 @@ export default function App() {
         clearReasoningLogs();
         return;
       }
-      const { addReasoningLog } = useStore.getState();
-      addReasoningLog({
+      useStore.getState().addReasoningLog({
         id: `reason-del-${Date.now()}`,
         project_id: projectId,
         step_number: useStore.getState().reasoningLogs.length + 1,
@@ -176,13 +215,16 @@ export default function App() {
       setRebalancing(false);
       setTimeout(() => runGeneration(true), 200);
     },
-    [flowers, projectId, removeFlower, setDeletingFlowerId, setRebalancing, runGeneration, setHarvestVisible, setGenerationStatus, clearReasoningLogs]
+    [
+      flowers, projectId, removeFlower, setDeletingFlowerId,
+      setRebalancing, runGeneration, setHarvestVisible,
+      setGenerationStatus, clearReasoningLogs,
+    ]
   );
 
   const handleReplantInsight = useCallback(
     async (result: HarvestResult) => {
-      const { addReasoningLog } = useStore.getState();
-      addReasoningLog({
+      useStore.getState().addReasoningLog({
         id: `reason-replant-${Date.now()}`,
         project_id: projectId,
         step_number: useStore.getState().reasoningLogs.length + 1,
@@ -195,42 +237,44 @@ export default function App() {
     [projectId, runGeneration]
   );
 
-  // Point 11.4: Manual connection triggers AI regeneration
   const handleManualConnect = useCallback(
     async (
       sourceType: 'orb' | 'flower',
       sourceId: string,
       targetType: 'orb' | 'flower',
-      targetId: string,
+      targetId: string
     ) => {
-      // Don't create duplicate connections
-      const { connections: currentConns, addConnection, addReasoningLog, flowers: currentFlowers } = useStore.getState();
-      const alreadyExists = currentConns.some(
-        c => (c.source_id === sourceId && c.target_id === targetId) ||
-             (c.source_id === targetId && c.target_id === sourceId)
-      );
-      if (alreadyExists) return;
+      const { connections: currentConns, addConnection: ac } = useStore.getState();
 
-      // Determine the actual target — must be a flower
-      // If user connected orb→flower or flower→flower
+      // Normalise: connection target must always be a flower
       const actualTargetId = targetType === 'orb' ? sourceId : targetId;
       const actualSourceId = targetType === 'orb' ? targetId : sourceId;
-      const actualSourceType = targetType === 'orb' ? 'flower' : sourceType;
+      const actualSourceType: 'orb' | 'flower' =
+        targetType === 'orb' ? (sourceType === 'orb' ? 'orb' : 'flower') : sourceType;
+
+      // Guard: can't connect flower to itself or orb to orb with no flower
+      if (actualTargetId === actualSourceId) return;
+
+      const alreadyExists = currentConns.some(
+        (c) =>
+          (c.source_id === actualSourceId && c.target_id === actualTargetId) ||
+          (c.source_id === actualTargetId && c.target_id === actualSourceId)
+      );
+      if (alreadyExists) return;
 
       const newConn = {
         id: `conn-manual-${Date.now()}`,
         project_id: projectId,
-        source_type: actualSourceType as 'orb' | 'flower',
+        source_type: actualSourceType,
         source_id: actualSourceType === 'orb' ? 'orb' : actualSourceId,
         target_type: 'flower' as const,
         target_id: actualTargetId,
         relationship_description: 'Manual connection',
         created_at: new Date().toISOString(),
       };
-      addConnection(newConn);
+      ac(newConn);
 
-      // Log and trigger regeneration
-      addReasoningLog({
+      useStore.getState().addReasoningLog({
         id: `reason-manual-conn-${Date.now()}`,
         project_id: projectId,
         step_number: useStore.getState().reasoningLogs.length + 1,
@@ -238,7 +282,6 @@ export default function App() {
         highlighted_phrases: ['manual connection'],
         created_at: new Date().toISOString(),
       });
-
       setTimeout(() => runGeneration(true), 400);
     },
     [projectId, runGeneration]
@@ -247,8 +290,11 @@ export default function App() {
   return (
     <div className="flex flex-col w-full h-full" style={{ background: '#080d18' }}>
       <Header />
+
       <div className="flex flex-1 overflow-hidden" style={{ marginTop: 56 }}>
         <LeftPanel />
+
+        {/* Center column */}
         <div className="flex-1 flex flex-col overflow-hidden relative">
           {/* Top action bar */}
           <div
@@ -257,10 +303,14 @@ export default function App() {
               background: 'rgba(8,13,24,0.95)',
               borderBottom: '1px solid rgba(255,255,255,0.05)',
               backdropFilter: 'blur(12px)',
+              zIndex: 10,
             }}
           >
             <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>
+              <div
+                className="flex items-center gap-2 text-xs"
+                style={{ color: 'rgba(255,255,255,0.35)' }}
+              >
                 <div
                   className="w-1.5 h-1.5 rounded-full"
                   style={{
@@ -269,29 +319,49 @@ export default function App() {
                   }}
                 />
                 {flowers.length > 0
-                  ? `${flowers.length} flowers · ${flowers.reduce((acc, f) => acc + f.petals.length, 0)} petals`
+                  ? `${flowers.length} flowers · ${flowers.reduce(
+                      (acc, f) => acc + f.petals.length,
+                      0
+                    )} petals`
                   : 'Garden empty'}
               </div>
             </div>
             <StartGrowthButton onStart={handleStartGrowth} />
-            <div className="flex items-center gap-2 text-xs" style={{ color: 'rgba(255,255,255,0.25)' }}>
-              {generationStatus === 'loading' && <span style={{ color: 'rgba(0,220,255,0.6)' }}>⟳ Processing...</span>}
-              {generationStatus === 'success' && flowers.length > 0 && <span style={{ color: 'rgba(57,255,20,0.6)' }}>✓ Growth complete</span>}
-              {generationStatus === 'error' && <span style={{ color: 'rgba(255,100,100,0.7)' }}>✕ Error</span>}
+            <div
+              className="flex items-center gap-2 text-xs"
+              style={{ color: 'rgba(255,255,255,0.25)' }}
+            >
+              {generationStatus === 'loading' && (
+                <span style={{ color: 'rgba(0,220,255,0.6)' }}>⟳ Processing...</span>
+              )}
+              {generationStatus === 'success' && flowers.length > 0 && (
+                <span style={{ color: 'rgba(57,255,20,0.6)' }}>✓ Growth complete</span>
+              )}
+              {generationStatus === 'error' && (
+                <span style={{ color: 'rgba(255,100,100,0.7)' }}>✕ Error</span>
+              )}
             </div>
           </div>
 
-          {/* Canvas + Harvest */}
-          <div className="flex-1 relative overflow-hidden">
+          {/* Canvas + Harvest wrapper — position:relative so harvest panel
+              absolute-positions correctly inside it */}
+          <div
+            ref={canvasWrapperRef}
+            className="flex-1 relative overflow-hidden"
+          >
             <Canvas
               onDeletePetal={handleDeletePetal}
               onDeleteFlower={handleDeleteFlower}
               onManualConnect={handleManualConnect}
               pulseBright={pulseBright}
+              harvestPanelHeightPx={harvestPanelHeightPx}
             />
+            {/* HarvestPanel: absolute bottom-0 inside canvasWrapperRef.
+                data-harvest-panel attribute used by ResizeObserver query. */}
             <HarvestPanel onReplant={handleReplantInsight} />
           </div>
         </div>
+
         <RightPanel onRegenerate={handleRegenerate} />
       </div>
     </div>

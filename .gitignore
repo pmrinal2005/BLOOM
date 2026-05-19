@@ -1,2 +1,24 @@
+.env
+.env.local
+.env.*.local
+*.env
+# Ignore backup or text files containing secrets
+*.secret
+secrets.json
+
+
 node_modules/
-dist/
+/dist
+/build
+package-lock.json
+npm-debug.log*
+yarn-error.log*
+
+
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
