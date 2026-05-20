@@ -1,3 +1,4 @@
+// C:\Users\mrutu\OneDrive\Desktop\bloom\src\App.tsx
 import { useCallback, useRef, useState, useEffect } from 'react';
 import { useStore } from './store/useStore';
 import Header from './components/Header';
@@ -6,15 +7,15 @@ import Canvas from './components/Canvas/Canvas';
 import RightPanel from './components/RightPanel/RightPanel';
 import HarvestPanel from './components/HarvestPanel/HarvestPanel';
 import StartGrowthButton from './components/StartGrowthButton';
-import { generateGarden } from './services/openrouter';
+import { generateGarden } from './services/ai';
 import { assignPositions } from './utils/layout';
 import { ReasoningLog, HarvestResult } from './store/useStore';
+import { logInteractionEvent } from './lib/supabase';
 
 export default function App() {
   const {
     projectId, growthMode, creativityLevel, modelParams,
     problemUpload, inspirationUploads,
-    problemDescription,
     flowers, setFlowers, addFlower, setConnections, addConnection,
     addReasoningLog, clearReasoningLogs,
     setHarvestResults, setHarvestVisible,
@@ -29,26 +30,15 @@ export default function App() {
 
   const [pulseBright, setPulseBright] = useState(false);
   const generationRef = useRef(false);
-  const [newFlowerIds, setNewFlowerIds] = useState<Set<string>>(new Set());
 
   // ── Measure actual harvest panel height for toolbar offset ──
-  // We observe the canvas container's bottom child (HarvestPanel) via
-  // a sentinel div that sits at the bottom of the relative canvas wrapper.
-  // The harvest panel itself remains absolute-positioned (unchanged).
-  const [harvestPanelHeightPx, setHarvestPanelHeightPx] = useState(0);
   const canvasWrapperRef = useRef<HTMLDivElement>(null);
+  const [harvestPanelHeightPx, setHarvestPanelHeightPx] = useState(0);
 
-  // Recompute panel height whenever harvestVisible, harvestHeight, or
-  // minimized state changes. We measure the actual DOM height of the
-  // harvest panel element by querying it from the canvas wrapper.
   useEffect(() => {
     const computeHeight = () => {
       if (!canvasWrapperRef.current) return;
-      // The HarvestPanel renders as absolute bottom-0 inside canvasWrapperRef
-      // Query it by its known data attribute
-      const panel = canvasWrapperRef.current.querySelector<HTMLElement>(
-        '[data-harvest-panel]'
-      );
+      const panel = canvasWrapperRef.current.querySelector<HTMLElement>('[data-harvest-panel]');
       if (panel) {
         setHarvestPanelHeightPx(panel.getBoundingClientRect().height);
       } else {
@@ -58,12 +48,9 @@ export default function App() {
 
     computeHeight();
 
-    // Use ResizeObserver on the whole canvas wrapper to catch panel
-    // resize/minimize events
     const ro = new ResizeObserver(computeHeight);
     if (canvasWrapperRef.current) ro.observe(canvasWrapperRef.current);
 
-    // Also re-measure on a short interval to catch minimize animation end
     const interval = setInterval(computeHeight, 150);
 
     return () => {
@@ -78,30 +65,46 @@ export default function App() {
   }, []);
 
   const runGeneration = useCallback(
-    async (incorporateExisting = false) => {
+    async (incorporateExisting = false, triggerType = 'auto') => {
       if (generationRef.current) return;
-      const currentDescription = useStore.getState().problemDescription;
-      if (!currentDescription.trim()) return;
+
+      // ── Read latest values directly from store to avoid stale closures ──
+      const state = useStore.getState();
+      const currentDescription = state.problemDescription;
+      const currentProblemUpload = state.problemUpload;
+      const currentInspirationUploads = state.inspirationUploads;
+      const currentFlowers = state.flowers;
+      const currentCompactView = state.compactView;
+      const currentGrowthMode = state.growthMode;
+      const currentModelParams = state.modelParams;
+      const currentCreativityLevel = state.creativityLevel;
+
+      if (!currentDescription.trim()) {
+        console.warn('[App] No problem description — aborting generation');
+        return;
+      }
 
       generationRef.current = true;
       setGenerationStatus('loading');
       clearReasoningLogs();
 
       try {
-        const inspirationUrls = inspirationUploads
+        const inspirationUrls = currentInspirationUploads
           .filter(Boolean)
           .map((u) => u!.file_url);
 
         const result = await generateGarden(
           {
-            problemUploadUrl: problemUpload?.file_url,
+            problemUploadUrl: currentProblemUpload?.file_url,
             inspirationUrls,
             problemDescription: currentDescription,
-            existingFlowers: incorporateExisting ? flowers : [],
-            growthMode,
-            modelParams,
-            creativityLevel,
+            existingFlowers: incorporateExisting ? currentFlowers : [],
+            deletedEntities: [],
+            growthMode: currentGrowthMode,
+            modelParams: currentModelParams,
+            creativityLevel: currentCreativityLevel,
             projectId,
+            triggerType,
           },
           (log: ReasoningLog) => addReasoningLog(log)
         );
@@ -114,25 +117,29 @@ export default function App() {
 
         triggerOrbPulse();
 
-        const positioned = assignPositions(
-          incorporateExisting ? [...flowers, ...result.flowers] : result.flowers,
-          compactView
-        );
+        // ── Assign positions based on ring layout ──
+        const allFlowers = incorporateExisting
+          ? [...currentFlowers, ...result.flowers]
+          : result.flowers;
 
-        const newIds = new Set(result.flowers.map((f) => f.id));
-        setNewFlowerIds(newIds);
+        const positioned = assignPositions(allFlowers, currentCompactView);
 
         if (!incorporateExisting) {
+          // Clear canvas then animate flowers appearing one by one
           setFlowers([]);
           setConnections([]);
+          await new Promise((r) => setTimeout(r, 80)); // small pause for clear to register
+
           for (let i = 0; i < positioned.length; i++) {
             await new Promise((r) => setTimeout(r, 180));
             addFlower(positioned[i]);
           }
         } else {
+          // Replace all flowers with repositioned set
           setFlowers(positioned);
         }
 
+        // Animate connections appearing
         for (const conn of result.connections) {
           await new Promise((r) => setTimeout(r, 100));
           addConnection(conn);
@@ -143,37 +150,50 @@ export default function App() {
         setHarvestVisible(true);
         setGenerationStatus('success');
       } catch (err: any) {
+        console.error('[App] Generation failed:', err);
         setGenerationStatus('error');
         setErrorMessage(err?.message || 'Connection issue. Please try again.');
       } finally {
         generationRef.current = false;
       }
     },
+    // Minimal stable dependencies — reads state directly inside to avoid staleness
     [
-      problemUpload, inspirationUploads, problemDescription, flowers,
-      growthMode, modelParams, creativityLevel, projectId, compactView,
+      projectId,
       addFlower, addConnection, setFlowers, setConnections,
-      addReasoningLog, clearReasoningLogs, setHarvestResults, setHarvestVisible,
-      setGenerationStatus, setErrorMessage, triggerOrbPulse,
+      addReasoningLog, clearReasoningLogs,
+      setHarvestResults, setHarvestVisible,
+      setGenerationStatus, setErrorMessage,
+      triggerOrbPulse,
     ]
   );
 
-  const handleStartGrowth = useCallback(() => runGeneration(false), [runGeneration]);
-  const handleRegenerate = useCallback(() => runGeneration(true), [runGeneration]);
+  const handleStartGrowth = useCallback(() => runGeneration(false, 'auto'), [runGeneration]);
+  const handleRegenerate = useCallback(() => runGeneration(true, 'param_change'), [runGeneration]);
 
   const handleDeletePetal = useCallback(
     async (flowerId: string, petalId: string) => {
-      const flower = flowers.find((f) => f.id === flowerId);
+      const { flowers: currentFlowers } = useStore.getState();
+      const flower = currentFlowers.find((f) => f.id === flowerId);
       if (!flower) return;
+
       setDeletingPetalId(petalId);
       await new Promise((r) => setTimeout(r, 350));
       removePetal(flowerId, petalId);
       setDeletingPetalId(null);
+
+      await logInteractionEvent({
+        projectId,
+        eventType: 'delete_petal',
+        payload: { flowerId, petalId, flowerName: flower.entity_name },
+      });
+
       const remainingPetals = flower.petals.filter((p) => p.id !== petalId);
       if (remainingPetals.length === 0) {
         handleDeleteFlower(flowerId);
         return;
       }
+
       useStore.getState().addReasoningLog({
         id: `reason-regen-${Date.now()}`,
         project_id: projectId,
@@ -182,26 +202,36 @@ export default function App() {
         highlighted_phrases: [flower.entity_name],
         created_at: new Date().toISOString(),
       });
-      setTimeout(() => runGeneration(true), 500);
+      setTimeout(() => runGeneration(true, 'delete_petal'), 500);
     },
-    [flowers, projectId, removePetal, setDeletingPetalId, runGeneration]
+    [projectId, removePetal, setDeletingPetalId, runGeneration]
   );
 
   const handleDeleteFlower = useCallback(
     async (flowerId: string) => {
-      const flower = flowers.find((f) => f.id === flowerId);
+      const { flowers: currentFlowers } = useStore.getState();
+      const flower = currentFlowers.find((f) => f.id === flowerId);
       if (!flower) return;
+
       setDeletingFlowerId(flowerId);
       await new Promise((r) => setTimeout(r, 600));
       removeFlower(flowerId);
       setDeletingFlowerId(null);
-      const { flowers: currentFlowers } = useStore.getState();
-      if (currentFlowers.length === 0) {
+
+      await logInteractionEvent({
+        projectId,
+        eventType: 'delete_flower',
+        payload: { flowerId, flowerName: flower.entity_name },
+      });
+
+      const { flowers: afterDelete } = useStore.getState();
+      if (afterDelete.length === 0) {
         setHarvestVisible(false);
         setGenerationStatus('idle');
         clearReasoningLogs();
         return;
       }
+
       useStore.getState().addReasoningLog({
         id: `reason-del-${Date.now()}`,
         project_id: projectId,
@@ -210,13 +240,14 @@ export default function App() {
         highlighted_phrases: [flower.entity_name],
         created_at: new Date().toISOString(),
       });
+
       setRebalancing(true);
       await new Promise((r) => setTimeout(r, 1500));
       setRebalancing(false);
-      setTimeout(() => runGeneration(true), 200);
+      setTimeout(() => runGeneration(true, 'delete_flower'), 200);
     },
     [
-      flowers, projectId, removeFlower, setDeletingFlowerId,
+      projectId, removeFlower, setDeletingFlowerId,
       setRebalancing, runGeneration, setHarvestVisible,
       setGenerationStatus, clearReasoningLogs,
     ]
@@ -232,7 +263,14 @@ export default function App() {
         highlighted_phrases: [result.title],
         created_at: new Date().toISOString(),
       });
-      await runGeneration(true);
+
+      await logInteractionEvent({
+        projectId,
+        eventType: 'replant_insight',
+        payload: { harvestId: result.id, title: result.title, tabType: result.tab_type },
+      });
+
+      await runGeneration(true, 'replant');
     },
     [projectId, runGeneration]
   );
@@ -252,7 +290,6 @@ export default function App() {
       const actualSourceType: 'orb' | 'flower' =
         targetType === 'orb' ? (sourceType === 'orb' ? 'orb' : 'flower') : sourceType;
 
-      // Guard: can't connect flower to itself or orb to orb with no flower
       if (actualTargetId === actualSourceId) return;
 
       const alreadyExists = currentConns.some(
@@ -274,6 +311,12 @@ export default function App() {
       };
       ac(newConn);
 
+      await logInteractionEvent({
+        projectId,
+        eventType: 'manual_connect',
+        payload: { sourceType: actualSourceType, sourceId: actualSourceId, targetId: actualTargetId },
+      });
+
       useStore.getState().addReasoningLog({
         id: `reason-manual-conn-${Date.now()}`,
         project_id: projectId,
@@ -282,7 +325,7 @@ export default function App() {
         highlighted_phrases: ['manual connection'],
         created_at: new Date().toISOString(),
       });
-      setTimeout(() => runGeneration(true), 400);
+      setTimeout(() => runGeneration(true, 'manual_connect'), 400);
     },
     [projectId, runGeneration]
   );
@@ -294,7 +337,6 @@ export default function App() {
       <div className="flex flex-1 overflow-hidden" style={{ marginTop: 56 }}>
         <LeftPanel />
 
-        {/* Center column */}
         <div className="flex-1 flex flex-col overflow-hidden relative">
           {/* Top action bar */}
           <div
@@ -319,10 +361,7 @@ export default function App() {
                   }}
                 />
                 {flowers.length > 0
-                  ? `${flowers.length} flowers · ${flowers.reduce(
-                      (acc, f) => acc + f.petals.length,
-                      0
-                    )} petals`
+                  ? `${flowers.length} flowers · ${flowers.reduce((acc, f) => acc + f.petals.length, 0)} petals`
                   : 'Garden empty'}
               </div>
             </div>
@@ -343,12 +382,8 @@ export default function App() {
             </div>
           </div>
 
-          {/* Canvas + Harvest wrapper — position:relative so harvest panel
-              absolute-positions correctly inside it */}
-          <div
-            ref={canvasWrapperRef}
-            className="flex-1 relative overflow-hidden"
-          >
+          {/* Canvas + Harvest wrapper */}
+          <div ref={canvasWrapperRef} className="flex-1 relative overflow-hidden">
             <Canvas
               onDeletePetal={handleDeletePetal}
               onDeleteFlower={handleDeleteFlower}
@@ -356,8 +391,7 @@ export default function App() {
               pulseBright={pulseBright}
               harvestPanelHeightPx={harvestPanelHeightPx}
             />
-            {/* HarvestPanel: absolute bottom-0 inside canvasWrapperRef.
-                data-harvest-panel attribute used by ResizeObserver query. */}
+            {/* HarvestPanel: absolute bottom-0 inside canvasWrapperRef */}
             <HarvestPanel onReplant={handleReplantInsight} />
           </div>
         </div>
