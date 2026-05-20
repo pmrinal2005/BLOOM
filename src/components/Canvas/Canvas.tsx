@@ -1,7 +1,8 @@
+// C:\Users\mrutu\OneDrive\Desktop\bloom\src\components\Canvas\Canvas.tsx
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { useStore } from '../../store/useStore';
 import CentralOrb from './CentralOrb';
-import FlowerNode, { FlowerTooltip } from './FlowerNode';
+import FlowerNode from './FlowerNode';
 import VineConnection from './VineConnection';
 import { ZoomIn, ZoomOut, RotateCcw, Minimize2 } from 'lucide-react';
 import { cubicBezierPath, getColorConfig } from '../../utils/layout';
@@ -21,13 +22,6 @@ interface Props {
 
 const SNAP_RADIUS = 65;
 
-// ── Per-flower tooltip state managed in Canvas so we can render tooltips
-//    in a single top-level SVG group AFTER the orb (fixing z-order) ──
-interface TooltipState {
-  visible: boolean;
-  showDeleteConfirm: boolean;
-}
-
 export default function Canvas({
   onDeletePetal, onDeleteFlower, pulseBright, onManualConnect, harvestPanelHeightPx,
 }: Props) {
@@ -46,52 +40,6 @@ export default function Canvas({
   const isPanning = useRef(false);
   const lastPan = useRef({ x: 0, y: 0 });
   const [svgSize, setSvgSize] = useState({ w: 800, h: 600 });
-
-  // ── Point 1 & 4: Tooltip states keyed by flower id — managed here ──
-  const [tooltipStates, setTooltipStates] = useState<Record<string, TooltipState>>({});
-
-  const setTooltipVisible = useCallback((flowerId: string, visible: boolean) => {
-    setTooltipStates(prev => ({
-      ...prev,
-      [flowerId]: { ...( prev[flowerId] ?? { showDeleteConfirm: false }), visible },
-    }));
-  }, []);
-
-  const setDeleteConfirm = useCallback((flowerId: string, v: boolean) => {
-    setTooltipStates(prev => ({
-      ...prev,
-      [flowerId]: { ...(prev[flowerId] ?? { visible: true }), showDeleteConfirm: v },
-    }));
-  }, []);
-
-  // Hover timers per flower
-  const hoverTimers = useRef<Record<string, { show?: ReturnType<typeof setTimeout>; hide?: ReturnType<typeof setTimeout> }>>({});
-
-  const handleFlowerHover = useCallback((flowerId: string | null) => {
-    setHoveredFlowerId(flowerId);
-
-    if (flowerId) {
-      // Cancel hide timer for this flower
-      const t = hoverTimers.current[flowerId];
-      if (t?.hide) { clearTimeout(t.hide); t.hide = undefined; }
-      // Schedule show
-      if (!hoverTimers.current[flowerId]) hoverTimers.current[flowerId] = {};
-      hoverTimers.current[flowerId].show = setTimeout(() => {
-        setTooltipVisible(flowerId, true);
-      }, 290);
-    } else {
-      // Hide all — but with grace period
-      for (const fid of Object.keys(tooltipStates)) {
-        const t = hoverTimers.current[fid];
-        if (t?.show) { clearTimeout(t.show); t.show = undefined; }
-        if (!hoverTimers.current[fid]) hoverTimers.current[fid] = {};
-        hoverTimers.current[fid].hide = setTimeout(() => {
-          setTooltipVisible(fid, false);
-          setDeleteConfirm(fid, false);
-        }, 120);
-      }
-    }
-  }, [setHoveredFlowerId, tooltipStates, setTooltipVisible, setDeleteConfirm]);
 
   const [zoomInputValue, setZoomInputValue] = useState('100');
   const [zoomInputFocused, setZoomInputFocused] = useState(false);
@@ -126,7 +74,6 @@ export default function Canvas({
     return () => window.removeEventListener('resize', update);
   }, []);
 
-  // Off-screen counter
   useEffect(() => {
     if (!flowers.length) { setOffScreenCount(0); return; }
     const halfW = svgSize.w / 2 / canvasZoom;
@@ -268,13 +215,11 @@ export default function Canvas({
 
   return (
     <div className="relative w-full h-full overflow-hidden" style={{ background: '#080d18' }}>
-      {/* Dot grid */}
       <div style={{
         position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
         backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.3) 1.8px, transparent 1.8px)',
         backgroundSize: '32px 32px',
       }} />
-      {/* Ambient */}
       <div style={{
         position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
         backgroundImage: `radial-gradient(ellipse at 50% 50%, rgba(0,80,120,0.09) 0%, transparent 70%)`,
@@ -300,7 +245,7 @@ export default function Canvas({
             />
           ))}
 
-          {/* Flower shapes (no tooltips here — rendered below after orb) */}
+          {/* Flower nodes — tooltips are now INSIDE FlowerNode, not duplicated here */}
           {flowers.map(flower => (
             <FlowerNode
               key={flower.id} flower={flower}
@@ -309,7 +254,7 @@ export default function Canvas({
               isSelected={selectedFlowerId === flower.id}
               isSnapTarget={draggingConnection?.snapTargetId === flower.id}
               compactView={compactView} canvasZoom={canvasZoom}
-              onHover={handleFlowerHover}
+              onHover={setHoveredFlowerId}
               onSelect={setSelectedFlowerId}
               onDeletePetal={onDeletePetal}
               onDeleteFlower={onDeleteFlower}
@@ -319,33 +264,10 @@ export default function Canvas({
             />
           ))}
 
-          {/* Central orb */}
+          {/* Central orb — rendered AFTER flowers so it appears on top visually */}
           <g onMouseDown={handleOrbDragStart} style={{ cursor: 'crosshair' }}>
             <CentralOrb pulseBright={pulseBright} />
           </g>
-
-          {/* ── Point 4: Tooltips rendered LAST = always on top of orb ──
-              Each tooltip transforms to the flower's position. ── */}
-          {flowers.map(flower => {
-            const ts = tooltipStates[flower.id];
-            if (!ts?.visible || hoveredFlowerId !== flower.id) return null;
-            const color = getColorConfig(flower.color_theme);
-            const size = compactView ? 38 : 46;
-            // Determine if we need to flip tooltip to left (flower on right half)
-            const flipLeft = flower.position_x > 80;
-            return (
-              <g key={`tooltip-${flower.id}`} transform={`translate(${flower.position_x}, ${flower.position_y})`}>
-                <FlowerTooltip
-                  flower={flower} size={size} color={color}
-                  onDeletePetal={onDeletePetal}
-                  onDeleteFlower={onDeleteFlower}
-                  showDeleteConfirm={ts.showDeleteConfirm ?? false}
-                  setShowDeleteConfirm={(v) => setDeleteConfirm(flower.id, v)}
-                  flipLeft={flipLeft}
-                />
-              </g>
-            );
-          })}
 
           {/* Orb snap flash */}
           {draggingConnection?.snapTargetId === 'orb' && (
@@ -379,7 +301,7 @@ export default function Canvas({
         {!hasContent && !isLoading && !isError && generationStatus === 'idle' && (
           <g>
             <text x="50%" y="35%" textAnchor="middle" style={{ fill: 'rgba(255,255,255,0.22)', fontSize: 14, fontFamily: 'Inter, sans-serif' }}>
-              Add Problem and Inspiration matrices on the left,
+              Add a Problem Description on the left,
             </text>
             <text x="50%" y="35%" dy="22" textAnchor="middle" style={{ fill: 'rgba(255,255,255,0.22)', fontSize: 14, fontFamily: 'Inter, sans-serif' }}>
               then click Start Growth to begin.
@@ -394,14 +316,6 @@ export default function Canvas({
           </g>
         )}
         {isError && <text x="50%" y="38%" textAnchor="middle" style={{ fill: 'rgba(255,100,100,0.8)', fontSize: 13, fontFamily: 'Inter, sans-serif', fontWeight: 500 }}>{errorMessage || 'Connection issue. Please try again.'}</text>}
-        {hasContent && flowers.length <= 2 && !isLoading && (
-          <foreignObject x="50%" y="25%" width="200" height="50" style={{ transform: 'translateX(-100px)' }}>
-            <div className="expand-pulse flex items-center justify-center gap-2 text-xs font-medium px-4 py-2 rounded-xl"
-              style={{ background: 'rgba(0,220,255,0.1)', border: '1px solid rgba(0,220,255,0.3)', color: 'rgba(0,220,255,0.85)', cursor: 'pointer' }}>
-              ✦ Expand this idea
-            </div>
-          </foreignObject>
-        )}
       </svg>
 
       {rebalancing && (

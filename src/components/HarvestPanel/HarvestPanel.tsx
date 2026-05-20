@@ -1,379 +1,385 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useStore, HarvestResult } from '../../store/useStore';
-import { X, Share2, ChevronDown, ChevronUp, Leaf, Maximize2 } from 'lucide-react';
-import ShareModal from './ShareModal';
+import { ChevronUp, ChevronDown, X, ExternalLink } from 'lucide-react';
 
-const TABS = ['Core Insights', 'Generated Artifacts', 'Future Scenarios', 'Flow Analysis'] as const;
+interface Props { onReplant: (result: HarvestResult) => void; }
 
-const TAB_ICONS: Record<string, string> = {
-  'Core Insights': '💡',
-  'Generated Artifacts': '⚗️',
-  'Future Scenarios': '🔮',
-  'Flow Analysis': '📊',
-};
-
-const CARD_COLORS = ['cyan', 'green', 'pink', 'orange', 'blue', 'purple'];
-
-// ── Point 3: Full-screen card modal ──
-function CardModal({
-  result,
-  onClose,
-  onReplant,
-  onShare,
-  index,
-}: {
-  result: HarvestResult;
-  onClose: () => void;
-  onReplant: (r: HarvestResult) => void;
-  onShare: (r: HarvestResult) => void;
-  index: number;
-}) {
-  const color = CARD_COLORS[index % CARD_COLORS.length];
-  const colorMap: Record<string, { accent: string; bg: string; border: string }> = {
-    cyan:   { accent: '#00ffff', bg: 'rgba(0,255,255,0.06)',   border: 'rgba(0,255,255,0.25)'   },
-    green:  { accent: '#39ff14', bg: 'rgba(57,255,20,0.06)',   border: 'rgba(57,255,20,0.25)'   },
-    pink:   { accent: '#ff10f0', bg: 'rgba(255,16,240,0.06)',  border: 'rgba(255,16,240,0.25)'  },
-    orange: { accent: '#ffa500', bg: 'rgba(255,165,0,0.06)',   border: 'rgba(255,165,0,0.25)'   },
-    blue:   { accent: '#1e90ff', bg: 'rgba(30,144,255,0.06)',  border: 'rgba(30,144,255,0.25)'  },
-    purple: { accent: '#b400ff', bg: 'rgba(180,0,255,0.06)',   border: 'rgba(180,0,255,0.25)'   },
+function getTabColor(tabType: string) {
+  const map: Record<string, { main: string; bg: string; border: string }> = {
+    'Core Insights':       { main: '#00ffff', bg: 'rgba(0,255,255,0.09)',   border: 'rgba(0,255,255,0.28)' },
+    'Generated Artifacts': { main: '#39ff14', bg: 'rgba(57,255,20,0.09)',   border: 'rgba(57,255,20,0.28)' },
+    'Future Scenarios':    { main: '#ff10f0', bg: 'rgba(255,16,240,0.09)',  border: 'rgba(255,16,240,0.28)' },
+    'Flow Analysis':       { main: '#ffa500', bg: 'rgba(255,165,0,0.09)',   border: 'rgba(255,165,0,0.28)' },
   };
-  const c = colorMap[color];
-  const content = result.content || {};
+  return map[tabType] ?? { main: '#00ffff', bg: 'rgba(0,255,255,0.09)', border: 'rgba(0,255,255,0.28)' };
+}
 
-  return (
+/**
+ * Task 5: Read More modal — rendered via React Portal directly into document.body.
+ * This guarantees it floats above EVERYTHING including the harvest panel (z-index 20).
+ */
+function ReadMoreModal({ result, onClose }: { result: HarvestResult; onClose: () => void }) {
+  const color = getTabColor(result.tab_type);
+  const { theme } = useStore();
+  const isDark = theme === 'dark';
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', handler);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
+
+  const modalContent = (
     <div
-      style={{
-        position: 'fixed', inset: 0, zIndex: 100,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'rgba(0,0,0,0.78)', backdropFilter: 'blur(10px)',
-      }}
       onClick={onClose}
+      style={{
+        position: 'fixed',
+        top: 0, left: 0, right: 0, bottom: 0,
+        zIndex: 99999,   // above everything
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'rgba(0,0,0,0.85)',
+        backdropFilter: 'blur(10px)',
+        padding: '20px 16px',
+      }}
     >
       <div
-        style={{
-          width: '90%', maxWidth: 680, maxHeight: '80vh',
-          borderRadius: 18, overflow: 'hidden',
-          background: 'rgba(9,13,24,0.99)',
-          border: `1px solid ${c.border}`,
-          boxShadow: `0 0 60px ${c.accent}22, 0 24px 80px rgba(0,0,0,0.7)`,
-          display: 'flex', flexDirection: 'column',
-        }}
         onClick={e => e.stopPropagation()}
+        style={{
+          width: '100%',
+          maxWidth: 680,
+          maxHeight: '85vh',
+          borderRadius: 18,
+          background: isDark ? 'rgba(9,13,24,0.99)' : 'rgba(255,255,255,0.99)',
+          border: `1px solid ${color.border}`,
+          boxShadow: `0 0 80px ${color.main}20, 0 20px 60px rgba(0,0,0,0.5)`,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
       >
         {/* Modal header */}
-        <div style={{
-          display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-          padding: '20px 24px 16px',
-          borderBottom: `1px solid ${c.border}`,
-          background: c.bg,
-          flexShrink: 0,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, flex: 1 }}>
-            <div style={{
-              width: 40, height: 40, borderRadius: 12, fontSize: 18,
-              background: `${c.accent}18`, border: `1px solid ${c.accent}30`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-            }}>
-              {TAB_ICONS[result.tab_type]}
-            </div>
-            <div>
-              <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'rgba(255,255,255,0.92)', lineHeight: 1.3 }}>
-                {result.title}
-              </h2>
-              <p style={{ margin: '6px 0 0', fontSize: 12, color: 'rgba(255,255,255,0.5)', fontStyle: 'italic', lineHeight: 1.5 }}>
-                {result.summary}
-              </p>
-            </div>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '20px 24px 16px', borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)'}`, flexShrink: 0 }}>
+          <div style={{ flex: 1, minWidth: 0, paddingRight: 16 }}>
+            <span style={{ display: 'inline-block', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', color: color.main, background: color.bg, border: `1px solid ${color.border}`, borderRadius: 6, padding: '2px 8px', marginBottom: 10 }}>
+              {result.tab_type.toUpperCase()}
+            </span>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: isDark ? 'rgba(255,255,255,0.92)' : 'rgba(0,0,0,0.88)', margin: '0 0 8px', lineHeight: 1.3 }}>
+              {result.title}
+            </h3>
+            <p style={{ fontSize: 12.5, color: isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.55)', margin: 0, lineHeight: 1.6 }}>
+              {result.summary}
+            </p>
           </div>
           <button
             onClick={onClose}
-            style={{
-              width: 32, height: 32, borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)',
-              background: 'rgba(255,255,255,0.06)', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: 'rgba(255,255,255,0.6)', flexShrink: 0, marginLeft: 12,
-            }}
+            style={{ width: 34, height: 34, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)', border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`, cursor: 'pointer', color: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)', flexShrink: 0 }}
           >
-            <X size={15} strokeWidth={2.5} />
+            <X size={16} strokeWidth={2.5} />
           </button>
         </div>
 
-        {/* Modal body */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
-          {content.paragraphs?.map((p: string, i: number) => (
-            <p key={i} style={{ fontSize: 13, lineHeight: 1.7, color: 'rgba(255,255,255,0.72)', marginBottom: 14 }}>
-              {p}
-            </p>
-          ))}
-          {content.key_points?.length > 0 && (
-            <div style={{ marginTop: 16 }}>
-              <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.08em', marginBottom: 10 }}>
-                KEY POINTS
-              </p>
-              <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {content.key_points.map((pt: string, i: number) => (
-                  <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                    <span style={{ color: c.accent, flexShrink: 0, marginTop: 2, fontSize: 10 }}>◆</span>
-                    <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', lineHeight: 1.5 }}>{pt}</span>
-                  </li>
-                ))}
-              </ul>
+        {/* Modal body — scrollable */}
+        <div style={{ overflowY: 'auto', padding: '20px 24px 24px', flex: 1, minHeight: 0 }}>
+          {(result.content?.paragraphs ?? []).length > 0 && (
+            <div style={{ marginBottom: 20 }}>
+              {(result.content.paragraphs as string[]).map((p, i) => (
+                <p key={i} style={{ fontSize: 13, lineHeight: 1.75, color: isDark ? 'rgba(255,255,255,0.76)' : 'rgba(0,0,0,0.72)', margin: '0 0 14px' }}>{p}</p>
+              ))}
             </div>
           )}
-        </div>
 
-        {/* Modal footer */}
-        <div style={{
-          display: 'flex', gap: 10, padding: '16px 24px',
-          borderTop: `1px solid ${c.border}`, flexShrink: 0,
-        }}>
-          <button
-            onClick={() => { onReplant(result); onClose(); }}
-            style={{
-              flex: 1, padding: '10px 0', borderRadius: 10, fontSize: 13, fontWeight: 600,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              background: `${c.accent}18`, border: `1px solid ${c.accent}35`, color: c.accent,
-              cursor: 'pointer',
-            }}
-          >
-            <Leaf size={13} /> Replant Insight
-          </button>
-          <button
-            onClick={() => { onShare(result); onClose(); }}
-            style={{
-              flex: 1, padding: '10px 0', borderRadius: 10, fontSize: 13, fontWeight: 600,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
-              color: 'rgba(255,255,255,0.6)', cursor: 'pointer',
-            }}
-          >
-            <Share2 size={13} /> Share Result
-          </button>
+          {(result.content?.key_points ?? []).length > 0 && (
+            <div>
+              <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.35)', textTransform: 'uppercase', margin: '0 0 14px' }}>KEY POINTS</p>
+              {(result.content.key_points as string[]).map((pt, i) => (
+                <div key={i} style={{ display: 'flex', gap: 14, marginBottom: 14 }}>
+                  <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, paddingTop: 4 }}>
+                    <div style={{ width: 7, height: 7, borderRadius: '50%', background: color.main, boxShadow: `0 0 6px ${color.main}` }} />
+                    {i < (result.content.key_points as string[]).length - 1 && (
+                      <div style={{ width: 1, flex: 1, minHeight: 10, background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)' }} />
+                    )}
+                  </div>
+                  <p style={{ fontSize: 12.5, lineHeight: 1.65, color: isDark ? 'rgba(255,255,255,0.74)' : 'rgba(0,0,0,0.7)', margin: 0 }}>{pt}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Empty state */}
+          {(result.content?.paragraphs ?? []).length === 0 && (result.content?.key_points ?? []).length === 0 && (
+            <p style={{ fontSize: 13, color: isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.35)', textAlign: 'center', margin: '24px 0' }}>No detailed content available.</p>
+          )}
         </div>
       </div>
     </div>
   );
+
+  // Task 5: Portal renders outside harvest panel DOM tree → no z-index conflicts
+  return createPortal(modalContent, document.body);
 }
 
-function HarvestCard({
-  result, onReplant, onShare, index,
-}: {
-  result: HarvestResult;
-  onReplant: (r: HarvestResult) => void;
-  onShare: (r: HarvestResult) => void;
-  index: number;
-}) {
+/**
+ * Task 4: HarvestCard — no overflow ever.
+ * Fixed flex column layout with text clamping and pinned buttons.
+ */
+function HarvestCard({ result, onReplant }: { result: HarvestResult; onReplant: (r: HarvestResult) => void }) {
   const [modalOpen, setModalOpen] = useState(false);
-  const color = CARD_COLORS[index % CARD_COLORS.length];
-  const colorMap: Record<string, { accent: string; bg: string; border: string }> = {
-    cyan:   { accent: '#00ffff', bg: 'rgba(0,255,255,0.05)',   border: 'rgba(0,255,255,0.15)'   },
-    green:  { accent: '#39ff14', bg: 'rgba(57,255,20,0.05)',   border: 'rgba(57,255,20,0.15)'   },
-    pink:   { accent: '#ff10f0', bg: 'rgba(255,16,240,0.05)',  border: 'rgba(255,16,240,0.15)'  },
-    orange: { accent: '#ffa500', bg: 'rgba(255,165,0,0.05)',   border: 'rgba(255,165,0,0.15)'   },
-    blue:   { accent: '#1e90ff', bg: 'rgba(30,144,255,0.05)',  border: 'rgba(30,144,255,0.15)'  },
-    purple: { accent: '#b400ff', bg: 'rgba(180,0,255,0.05)',   border: 'rgba(180,0,255,0.15)'   },
-  };
-  const c = colorMap[color];
+  const { theme } = useStore();
+  const isDark = theme === 'dark';
+  const color = getTabColor(result.tab_type);
+
+  const cardBg = isDark ? 'rgba(255,255,255,0.025)' : 'rgba(255,255,255,0.9)';
+  const titleColor = isDark ? 'rgba(255,255,255,0.88)' : 'rgba(0,0,0,0.85)';
+  const summaryColor = isDark ? 'rgba(255,255,255,0.48)' : 'rgba(0,0,0,0.55)';
+  const pointColor = isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.6)';
 
   return (
     <>
-      <div
-        className="harvest-card rounded-xl flex flex-col flex-shrink-0"
-        style={{ background: c.bg, border: `1px solid ${c.border}`, width: 260, height: '100%', padding: '10px 12px', overflow: 'hidden' }}
-      >
-        {/* Icon + Title */}
-        <div className="flex items-start gap-2" style={{ flexShrink: 0 }}>
-          <div style={{ width: 30, height: 30, fontSize: 14, background: `${c.accent}20`, border: `1px solid ${c.accent}30`, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            {TAB_ICONS[result.tab_type]}
-          </div>
-          <h4 style={{ color: 'rgba(255,255,255,0.9)', fontSize: 11, fontWeight: 700, lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', margin: 0, flex: 1 }}>
+      {/* Task 4: Card with strict flex column, no overflow */}
+      <div style={{
+        width: 236,
+        minWidth: 236,
+        maxWidth: 236,
+        flexShrink: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        background: cardBg,
+        border: `1px solid ${color.border}`,
+        borderRadius: 11,
+        padding: '10px 11px',
+        boxSizing: 'border-box',
+        overflow: 'hidden',       // prevent any child from escaping
+        height: '100%',
+        minHeight: 0,
+      }}>
+        {/* Badge */}
+        <div style={{ flexShrink: 0, marginBottom: 7 }}>
+          <span style={{ display: 'inline-block', fontSize: 7.5, fontWeight: 700, letterSpacing: '0.08em', color: color.main, background: color.bg, border: `1px solid ${color.border}`, borderRadius: 4, padding: '1.5px 6px' }}>
+            {result.tab_type.toUpperCase()}
+          </span>
+        </div>
+
+        {/* Title — max 2 lines */}
+        <div style={{ flexShrink: 0, marginBottom: 6, overflow: 'hidden' }}>
+          <h4 style={{ color: titleColor, fontSize: 10.5, fontWeight: 700, margin: 0, lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
             {result.title}
           </h4>
         </div>
 
-        {/* Summary */}
-        <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: 10, fontStyle: 'italic', lineHeight: 1.4, marginTop: 6, marginBottom: 0, flexShrink: 0, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-          {result.summary}
-        </p>
+        {/* Summary — max 3 lines */}
+        <div style={{ flexShrink: 0, marginBottom: 8, overflow: 'hidden' }}>
+          <p style={{ color: summaryColor, fontSize: 9.5, lineHeight: 1.5, margin: 0, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+            {result.summary}
+          </p>
+        </div>
 
-        <div style={{ flex: 1 }} />
+        {/* Key points — max 2, each max 2 lines */}
+        <div style={{ flexShrink: 0, marginBottom: 8, overflow: 'hidden' }}>
+          {(result.content?.key_points ?? []).slice(0, 2).map((pt: string, i: number) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginBottom: i < 1 ? 5 : 0, overflow: 'hidden' }}>
+              <div style={{ width: 4, height: 4, borderRadius: '50%', marginTop: 5, flexShrink: 0, background: color.main, boxShadow: `0 0 3px ${color.main}` }} />
+              <span style={{ color: pointColor, fontSize: 9, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{pt}</span>
+            </div>
+          ))}
+        </div>
 
-        {/* ── Point 3: "Read more" opens modal ── */}
-        <button
-          onClick={() => setModalOpen(true)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 3, fontSize: 10,
-            color: c.accent, background: 'none', border: 'none', cursor: 'pointer',
-            padding: '3px 0', flexShrink: 0, marginBottom: 5, opacity: 0.8,
-          }}
-        >
-          <Maximize2 size={9} />
-          Read more
-        </button>
+        {/* Spacer pushes buttons to bottom */}
+        <div style={{ flex: 1, minHeight: 4 }} />
 
-        {/* Actions */}
-        <div style={{ display: 'flex', gap: 6, paddingTop: 6, borderTop: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
+        {/* Buttons — always visible, never overflow */}
+        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
           <button
-            onClick={() => onReplant(result)}
-            style={{ flex: 1, padding: '5px 0', borderRadius: 8, fontSize: 10, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, background: `${c.accent}18`, border: `1px solid ${c.accent}35`, color: c.accent, cursor: 'pointer' }}
+            onClick={() => setModalOpen(true)}
+            style={{
+              flex: 1, minWidth: 0,
+              padding: '6px 4px', borderRadius: 7, fontSize: 9, fontWeight: 600,
+              background: color.bg, border: `1px solid ${color.border}`,
+              color: color.main, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3,
+              transition: 'background 0.15s',
+              whiteSpace: 'nowrap', overflow: 'hidden',
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${color.main}22`; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = color.bg; }}
           >
-            <Leaf size={10} /> Replant
+            <ExternalLink size={8} /> Read More
           </button>
           <button
-            onClick={() => onShare(result)}
-            style={{ flex: 1, padding: '5px 0', borderRadius: 8, fontSize: 10, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.55)', cursor: 'pointer' }}
+            onClick={() => onReplant(result)}
+            style={{
+              flex: 1, minWidth: 0,
+              padding: '6px 4px', borderRadius: 7, fontSize: 9, fontWeight: 600,
+              background: 'rgba(57,255,20,0.07)', border: '1px solid rgba(57,255,20,0.26)',
+              color: isDark ? '#39ff14' : '#22aa00',
+              cursor: 'pointer', transition: 'background 0.15s',
+              whiteSpace: 'nowrap', overflow: 'hidden',
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(57,255,20,0.18)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(57,255,20,0.07)'; }}
           >
-            <Share2 size={10} /> Share
+            🌱 Replant
           </button>
         </div>
       </div>
 
-      {modalOpen && (
-        <CardModal
-          result={result} index={index}
-          onClose={() => setModalOpen(false)}
-          onReplant={onReplant}
-          onShare={onShare}
-        />
-      )}
+      {modalOpen && <ReadMoreModal result={result} onClose={() => setModalOpen(false)} />}
     </>
   );
 }
 
-// ── Point 2: Min height = 28% of viewport, no X button ──
-const MIN_HEIGHT_PCT = 28;
+const MIN_HARVEST_HEIGHT = 240;
+const MAX_HARVEST_HEIGHT_VH = 65;
 
-export default function HarvestPanel({ onReplant }: { onReplant: (result: HarvestResult) => void }) {
+export default function HarvestPanel({ onReplant }: Props) {
   const {
     harvestResults, harvestVisible, setHarvestVisible,
-    activeHarvestTab, setActiveHarvestTab,
     harvestHeight, setHarvestHeight,
-    shareModal, setShareModal,
+    activeHarvestTab, setActiveHarvestTab,
+    generationStatus, theme,
   } = useStore();
 
+  const isDark = theme === 'dark';
   const [minimized, setMinimized] = useState(false);
-  const dragRef = useRef<{ startY: number; startH: number } | null>(null);
+  const dragRef = useRef(false);
+  const dragStartY = useRef(0);
+  const dragStartH = useRef(0);
 
-  if (!harvestVisible) return null;
-
-  const filteredResults = harvestResults.filter(r => r.tab_type === activeHarvestTab);
-
-  const handleDragStart = (e: React.MouseEvent) => {
+  const onDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
-    dragRef.current = { startY: e.clientY, startH: harvestHeight };
-    const handleMove = (ev: MouseEvent) => {
+    dragRef.current = true;
+    dragStartY.current = e.clientY;
+    dragStartH.current = harvestHeight;
+    const onMove = (ev: MouseEvent) => {
       if (!dragRef.current) return;
-      const dy = dragRef.current.startY - ev.clientY;
-      // ── Point 2: enforce minimum height ──
-      const newH = Math.max(MIN_HEIGHT_PCT, Math.min(75, dragRef.current.startH + (dy / window.innerHeight) * 100));
-      setHarvestHeight(newH);
+      const delta = dragStartY.current - ev.clientY;
+      const maxH = (window.innerHeight * MAX_HARVEST_HEIGHT_VH) / 100;
+      setHarvestHeight(Math.max(MIN_HARVEST_HEIGHT, Math.min(maxH, dragStartH.current + delta)));
     };
-    const handleUp = () => {
-      dragRef.current = null;
-      window.removeEventListener('mousemove', handleMove);
-      window.removeEventListener('mouseup', handleUp);
-    };
-    window.addEventListener('mousemove', handleMove);
-    window.addEventListener('mouseup', handleUp);
-  };
+    const onUp = () => { dragRef.current = false; window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [harvestHeight, setHarvestHeight]);
+
+  if (!harvestVisible && generationStatus !== 'loading') return null;
+
+  const allTabTypes = Array.from(new Set(harvestResults.map(h => h.tab_type)));
+  const filteredResults = activeHarvestTab === 'All'
+    ? harvestResults
+    : harvestResults.filter(h => h.tab_type === activeHarvestTab);
+
+  const displayHeight = minimized ? 48 : Math.max(MIN_HARVEST_HEIGHT, harvestHeight);
+
+  const panelBg = isDark ? 'rgba(8,12,24,0.97)' : 'rgba(248,250,255,0.97)';
+  const panelBorder = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.1)';
+  const headerColor = isDark ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.8)';
+  const countBg = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+  const countColor = isDark ? 'rgba(255,255,255,0.32)' : 'rgba(0,0,0,0.4)';
+  const btnBg = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+  const btnBorder = isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.1)';
+  const btnColor = isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.5)';
 
   return (
-    <>
+    <div
+      data-harvest-panel
+      style={{
+        position: 'absolute', bottom: 0, left: 0, right: 0,
+        height: displayHeight,
+        background: panelBg,
+        borderTop: `1px solid ${panelBorder}`,
+        backdropFilter: 'blur(20px)',
+        zIndex: 20,
+        display: 'flex', flexDirection: 'column',
+        transition: 'height 0.22s cubic-bezier(0.4,0,0.2,1)',
+        boxShadow: '0 -4px 30px rgba(0,0,0,0.35)',
+        boxSizing: 'border-box',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Drag handle */}
       <div
-        data-harvest-panel
-        className="absolute bottom-0 harvest-slide flex flex-col"
-        style={{
-          // ── Point 2: sideways spacing from left & right panels ──
-          left: 12,
-          right: 12,
-          height: minimized ? '44px' : `${harvestHeight}%`,
-          background: 'rgba(9,13,24,0.98)',
-          borderTop: '1px solid rgba(255,255,255,0.1)',
-          borderLeft: '1px solid rgba(255,255,255,0.06)',
-          borderRight: '1px solid rgba(255,255,255,0.06)',
-          backdropFilter: 'blur(20px)',
-          zIndex: 20,
-          transition: 'height 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          boxShadow: '0 -8px 40px rgba(0,0,0,0.55)',
-          borderRadius: '12px 12px 0 0',
-        }}
+        onMouseDown={minimized ? undefined : onDragStart}
+        style={{ height: 6, flexShrink: 0, background: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)', borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.05)'}`, cursor: minimized ? 'default' : 'row-resize', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       >
-        {/* Drag handle */}
-        <div
-          className="flex items-center justify-center flex-shrink-0 cursor-ns-resize"
-          onMouseDown={handleDragStart}
-          style={{ height: 18, borderBottom: minimized ? 'none' : '1px solid rgba(255,255,255,0.06)' }}
-        >
-          <div style={{ width: 44, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.18)' }} />
-        </div>
+        {!minimized && <div style={{ display: 'flex', gap: 4 }}>{[0,1,2].map(i => <div key={i} style={{ width: 24, height: 2, borderRadius: 2, background: isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.15)' }} />)}</div>}
+      </div>
 
-        {/* Tabs bar — NO X button */}
-        <div className="flex items-center justify-between flex-shrink-0"
-          style={{ padding: '0 16px', borderBottom: minimized ? 'none' : '1px solid rgba(255,255,255,0.06)', minHeight: minimized ? 'calc(100% - 18px)' : 40 }}>
-          <div style={{ display: 'flex', overflowX: 'auto', scrollbarWidth: 'none' }}>
-            {TABS.map(tab => {
-              const count = harvestResults.filter(r => r.tab_type === tab).length;
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 14px', flexShrink: 0, borderBottom: minimized ? 'none' : `1px solid ${isDark ? 'rgba(255,255,255,0.055)' : 'rgba(0,0,0,0.07)'}`, height: 40 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: headerColor }}>🌾 Harvest Panel</span>
+          {harvestResults.length > 0 && (
+            <span style={{ fontSize: 9, fontWeight: 700, color: countColor, background: countBg, borderRadius: 5, padding: '1px 7px' }}>
+              {harvestResults.length} insight{harvestResults.length !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 5 }}>
+          <button onClick={() => setMinimized(!minimized)} style={{ width: 26, height: 26, borderRadius: 7, background: btnBg, border: `1px solid ${btnBorder}`, color: btnColor, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {minimized ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+          </button>
+          <button onClick={() => setHarvestVisible(false)} style={{ width: 26, height: 26, borderRadius: 7, background: btnBg, border: `1px solid ${btnBorder}`, color: btnColor, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <X size={13} />
+          </button>
+        </div>
+      </div>
+
+      {!minimized && (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
+          {/* Tab filters */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 14px 5px', flexShrink: 0, borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.045)' : 'rgba(0,0,0,0.06)'}`, overflowX: 'auto' }}>
+            <button
+              onClick={() => setActiveHarvestTab('All')}
+              style={{ padding: '3px 11px', borderRadius: 7, fontSize: 10, fontWeight: 600, background: activeHarvestTab === 'All' ? (isDark ? 'rgba(255,255,255,0.13)' : 'rgba(0,0,0,0.1)') : (isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)'), border: `1px solid ${activeHarvestTab === 'All' ? (isDark ? 'rgba(255,255,255,0.28)' : 'rgba(0,0,0,0.2)') : (isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)')}`, color: activeHarvestTab === 'All' ? (isDark ? 'rgba(255,255,255,0.88)' : 'rgba(0,0,0,0.8)') : (isDark ? 'rgba(255,255,255,0.42)' : 'rgba(0,0,0,0.45)'), cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0, transition: 'all 0.15s' }}
+            >
+              All ({harvestResults.length})
+            </button>
+            {allTabTypes.map(tabType => {
+              const color = getTabColor(tabType);
+              const isActive = activeHarvestTab === tabType;
               return (
-                <button key={tab}
-                  onClick={() => { setActiveHarvestTab(tab); setMinimized(false); }}
-                  className={`harvest-tab ${activeHarvestTab === tab && !minimized ? 'active' : ''}`}
-                  style={{ color: activeHarvestTab === tab && !minimized ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.38)' }}
+                <button key={tabType} onClick={() => setActiveHarvestTab(tabType as any)}
+                  style={{ padding: '3px 11px', borderRadius: 7, fontSize: 10, fontWeight: 600, background: isActive ? color.bg : (isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)'), border: `1px solid ${isActive ? color.border : (isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.07)')}`, color: isActive ? color.main : (isDark ? 'rgba(255,255,255,0.42)' : 'rgba(0,0,0,0.45)'), cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0, transition: 'all 0.15s' }}
                 >
-                  <span style={{ marginRight: 4 }}>{TAB_ICONS[tab]}</span>
-                  {tab}
-                  {count > 0 && (
-                    <span style={{ marginLeft: 6, fontSize: 9, padding: '1px 5px', borderRadius: 10, background: 'rgba(0,220,255,0.12)', color: 'rgba(0,220,255,0.75)' }}>
-                      {count}
-                    </span>
-                  )}
+                  {tabType}
                 </button>
               );
             })}
           </div>
-          {/* ── Point 2: Only collapse "v" button, no X ── */}
-          <button
-            onClick={() => setMinimized(!minimized)}
-            style={{
-              width: 28, height: 28, borderRadius: 8, display: 'flex', alignItems: 'center',
-              justifyContent: 'center', cursor: 'pointer', flexShrink: 0,
-              background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
-              color: 'rgba(255,255,255,0.55)',
-            }}
-            title={minimized ? 'Expand panel' : 'Collapse panel'}
-          >
-            {minimized ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          </button>
-        </div>
 
-        {/* Cards */}
-        {!minimized && (
+          {/* Task 4: Cards container — fixed height, horizontal scroll, cards fill height */}
           <div style={{
-            flex: 1, minHeight: 0, padding: '10px 16px',
-            overflowX: filteredResults.length > 0 ? 'auto' : 'hidden',
-            overflowY: 'hidden', display: 'flex', alignItems: 'stretch',
+            flex: 1,
+            display: 'flex',
+            alignItems: 'stretch',
+            gap: 10,
+            padding: '10px 14px 10px',
+            overflowX: 'auto',
+            overflowY: 'hidden',
+            minHeight: 0,
+            boxSizing: 'border-box',
+            scrollbarWidth: 'thin',
+            scrollbarColor: isDark ? 'rgba(255,255,255,0.12) transparent' : 'rgba(0,0,0,0.12) transparent',
           }}>
             {filteredResults.length === 0 ? (
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, opacity: 0.5 }}>
-                <span style={{ fontSize: 28 }}>{TAB_ICONS[activeHarvestTab]}</span>
-                <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', margin: 0 }}>No results for this tab yet</p>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', color: isDark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.3)', fontSize: 11 }}>
+                {generationStatus === 'loading' ? 'Generating insights...' : activeHarvestTab !== 'All' ? `No ${activeHarvestTab} results.` : 'No harvest results yet.'}
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'row', gap: 12, alignItems: 'stretch', flexWrap: 'nowrap', width: 'max-content', height: '100%' }}>
-                {filteredResults.map((result, i) => (
-                  <HarvestCard key={result.id} result={result} index={i}
-                    onReplant={onReplant}
-                    onShare={r => setShareModal({ open: true, content: r })}
-                  />
-                ))}
-              </div>
+              filteredResults.map(result => (
+                <HarvestCard key={result.id} result={result} onReplant={onReplant} />
+              ))
             )}
           </div>
-        )}
-      </div>
-
-      {shareModal.open && shareModal.content && (
-        <ShareModal result={shareModal.content} onClose={() => setShareModal({ open: false, content: null })} />
+        </div>
       )}
-    </>
+    </div>
   );
 }

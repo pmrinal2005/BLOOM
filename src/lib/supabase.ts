@@ -4,9 +4,10 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = supabaseUrl && supabaseAnonKey
+  ? createClient(supabaseUrl, supabaseAnonKey)
+  : null;
 
-// ── Helper: upsert a full generation result into Supabase ──
 export async function persistGenerationToSupabase(params: {
   projectId: string;
   snapshotId: string;
@@ -17,7 +18,7 @@ export async function persistGenerationToSupabase(params: {
   harvestResults: any[];
   modelParams: any;
 }) {
-  if (!supabaseUrl || !supabaseAnonKey) return; // skip if not configured
+  if (!supabase) return;
 
   const {
     projectId, snapshotId, triggerType,
@@ -25,13 +26,11 @@ export async function persistGenerationToSupabase(params: {
   } = params;
 
   try {
-    // 1. Ensure project row exists
     await supabase.from('projects').upsert({
       id: projectId,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'id', ignoreDuplicates: false });
 
-    // 2. Create snapshot (trigger sets is_current on others to false)
     await supabase.from('garden_snapshots').insert({
       id: snapshotId,
       project_id: projectId,
@@ -40,7 +39,6 @@ export async function persistGenerationToSupabase(params: {
       created_at: new Date().toISOString(),
     });
 
-    // 3. Insert flowers + petals
     for (const flower of flowers) {
       await supabase.from('flowers').insert({
         id: flower.id,
@@ -69,7 +67,6 @@ export async function persistGenerationToSupabase(params: {
       }
     }
 
-    // 4. Insert connections
     for (const conn of connections) {
       await supabase.from('connections').insert({
         id: conn.id,
@@ -85,7 +82,6 @@ export async function persistGenerationToSupabase(params: {
       });
     }
 
-    // 5. Insert reasoning logs
     for (const log of reasoningLogs) {
       await supabase.from('reasoning_logs').insert({
         id: log.id,
@@ -98,7 +94,6 @@ export async function persistGenerationToSupabase(params: {
       });
     }
 
-    // 6. Insert harvest results
     for (const h of harvestResults) {
       await supabase.from('harvest_results').insert({
         id: h.id,
@@ -112,7 +107,6 @@ export async function persistGenerationToSupabase(params: {
       });
     }
 
-    // 7. Insert model params snapshot
     await supabase.from('model_param_snapshots').insert({
       snapshot_id: snapshotId,
       project_id: projectId,
@@ -129,19 +123,24 @@ export async function persistGenerationToSupabase(params: {
   }
 }
 
-// ── Log an interaction event ──
 export async function logInteractionEvent(params: {
   projectId: string;
   snapshotId?: string;
   eventType: string;
   payload: Record<string, any>;
 }) {
-  if (!supabaseUrl || !supabaseAnonKey) return;
+  if (!supabase) return;
   try {
+    // Map event types to match schema constraint
+    const allowedEventTypes = ['delete_petal', 'delete_flower', 'manual_connect', 'replant_insight', 'param_change', 'zoom_change', 'view_reset'];
+    const eventType = allowedEventTypes.includes(params.eventType)
+      ? params.eventType
+      : 'param_change'; // safe fallback
+
     await supabase.from('interaction_events').insert({
       project_id: params.projectId,
       snapshot_id: params.snapshotId ?? null,
-      event_type: params.eventType,
+      event_type: eventType,
       payload: params.payload,
       created_at: new Date().toISOString(),
     });

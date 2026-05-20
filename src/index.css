@@ -4,6 +4,7 @@
   box-sizing: border-box;
 }
 
+/* ── CSS Variables — Dark (default) ── */
 :root {
   --bg-primary: #0a0e1a;
   --bg-secondary: #0d1120;
@@ -23,6 +24,26 @@
   --accent-purple: #b400ff;
 }
 
+/* ── Task 3: Light theme CSS variables ── */
+.light-theme {
+  --bg-primary: #f0f4ff;
+  --bg-secondary: #e6ecf8;
+  --bg-panel: #ffffff;
+  --bg-card: #f5f7ff;
+  --bg-card-hover: #edf0ff;
+  --border-subtle: rgba(0, 0, 0, 0.07);
+  --border-medium: rgba(0, 0, 0, 0.13);
+  --text-primary: #0a0e1a;
+  --text-secondary: #2a3a5c;
+  --text-muted: #5a6a8a;
+  --accent-cyan: #0088aa;
+  --accent-green: #1a9900;
+  --accent-pink: #aa00aa;
+  --accent-orange: #b36000;
+  --accent-blue: #1060cc;
+  --accent-purple: #7700bb;
+}
+
 html, body, #root {
   margin: 0;
   padding: 0;
@@ -32,6 +53,21 @@ html, body, #root {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: var(--bg-primary);
   color: var(--text-primary);
+  /* Task 3: smooth theme transition */
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Task 3: Light theme text clarity — force legible colors on all text */
+.light-theme {
+  color: #0a0e1a;
+}
+
+.light-theme p,
+.light-theme span,
+.light-theme h1, .light-theme h2, .light-theme h3, .light-theme h4, .light-theme h5,
+.light-theme label,
+.light-theme div {
+  /* Don't force override — rely on component-level color values */
 }
 
 /* Custom scrollbar */
@@ -39,18 +75,13 @@ html, body, #root {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+.light-theme ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); }
+.light-theme ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
 
 /* ── Keyframes ── */
-
 @keyframes orbPulse {
-  0%, 100% {
-    filter: drop-shadow(0 0 20px rgba(0,220,255,0.8)) drop-shadow(0 0 40px rgba(0,220,255,0.4));
-    transform: scale(1);
-  }
-  50% {
-    filter: drop-shadow(0 0 35px rgba(0,220,255,1)) drop-shadow(0 0 70px rgba(0,220,255,0.6));
-    transform: scale(1.04);
-  }
+  0%, 100% { filter: drop-shadow(0 0 20px rgba(0,220,255,0.8)) drop-shadow(0 0 40px rgba(0,220,255,0.4)); transform: scale(1); }
+  50% { filter: drop-shadow(0 0 35px rgba(0,220,255,1)) drop-shadow(0 0 70px rgba(0,220,255,0.6)); transform: scale(1.04); }
 }
 
 @keyframes orbPulseBright {
@@ -122,24 +153,28 @@ html, body, #root {
   50% { box-shadow: 0 0 16px rgba(0,220,255,0.6), inset 0 0 12px rgba(0,220,255,0.1); }
 }
 
-/* Point 9: Conveyor belt for dotted flower→flower vines */
 @keyframes conveyorBelt {
   from { stroke-dashoffset: 0; }
   to { stroke-dashoffset: -30; }
 }
 
-/* Point 11: Snap target flash animation */
 @keyframes snapFlash {
   from { opacity: 0.4; }
   to { opacity: 1; }
 }
 
-/* Point 7 & 8: Flower sway — driven by JS rAF, no CSS keyframe needed for sway itself */
-/* But we add a subtle CSS filter pulse on the whole flower group for organic feel */
 @keyframes flowerGlowBreath {
   0%, 100% { filter: brightness(1); }
   50% { filter: brightness(1.08); }
 }
+
+@keyframes processingBar {
+  from { transform: scaleY(0.4); opacity: 0.4; }
+  to { transform: scaleY(1.2); opacity: 1; }
+}
+
+@keyframes orbRing { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes orbRingReverse { from { transform: rotate(360deg); } to { transform: rotate(0deg); } }
 
 .orb-pulse { animation: orbPulse 3s ease-in-out infinite; }
 .orb-pulse-bright { animation: orbPulseBright 0.8s ease-in-out; }
@@ -151,8 +186,11 @@ html, body, #root {
 .rebalancing-overlay { animation: rebalancingFade 2s ease-in-out forwards; }
 .fade-in { animation: fadeIn 0.3s ease-out forwards; }
 .slide-up { animation: slideUp 0.4s ease-out forwards; }
+.orb-ring-1 { animation: orbRing 8s linear infinite; }
+.orb-ring-2 { animation: orbRingReverse 12s linear infinite; }
+.orb-ring-3 { animation: orbRing 16s linear infinite; }
 
-/* Canvas background */
+/* ── Canvas background ── */
 .canvas-bg {
   background-color: #080d18;
   background-image:
@@ -161,9 +199,16 @@ html, body, #root {
     radial-gradient(circle at 75% 75%, rgba(180,0,255,0.015) 0%, transparent 50%);
 }
 
-.vine-glow {
-  filter: drop-shadow(0 0 3px currentColor) drop-shadow(0 0 6px currentColor);
+/* Task 3: Light canvas */
+.light-theme .canvas-bg {
+  background-color: #eef2ff;
+  background-image:
+    radial-gradient(ellipse at 50% 50%, rgba(0,80,180,0.05) 0%, transparent 70%),
+    radial-gradient(circle at 25% 25%, rgba(0,120,200,0.03) 0%, transparent 50%),
+    radial-gradient(circle at 75% 75%, rgba(120,0,200,0.03) 0%, transparent 50%);
 }
+
+.vine-glow { filter: drop-shadow(0 0 3px currentColor) drop-shadow(0 0 6px currentColor); }
 
 .panel-glass {
   background: rgba(13,17,32,0.95);
@@ -171,9 +216,20 @@ html, body, #root {
   border: 1px solid rgba(255,255,255,0.06);
 }
 
+/* Task 3: light panel glass */
+.light-theme .panel-glass {
+  background: rgba(255,255,255,0.96);
+  border: 1px solid rgba(0,0,0,0.08);
+}
+
 .neon-cyan { color: #00ffff; text-shadow: 0 0 10px rgba(0,255,255,0.6); }
 .neon-green { color: #39ff14; text-shadow: 0 0 10px rgba(57,255,20,0.6); }
 .neon-pink { color: #ff10f0; text-shadow: 0 0 10px rgba(255,16,240,0.6); }
+
+/* Task 3: light mode neon toned down for legibility */
+.light-theme .neon-cyan { color: #007799; text-shadow: none; }
+.light-theme .neon-green { color: #1a8800; text-shadow: none; }
+.light-theme .neon-pink { color: #990099; text-shadow: none; }
 
 /* Slider */
 input[type="range"] {
@@ -204,6 +260,12 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
   box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04);
 }
 
+.light-theme .tooltip-card {
+  background: rgba(255,255,255,0.98);
+  border: 1px solid rgba(0,0,0,0.1);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+}
+
 .highlight-text {
   background: linear-gradient(135deg, rgba(0,255,255,0.2), rgba(0,255,255,0.1));
   color: #00ffff;
@@ -212,10 +274,20 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
   font-weight: 500;
 }
 
+/* Task 3: light mode highlight */
+.light-theme .highlight-text {
+  background: rgba(0,120,180,0.12);
+  color: #005577;
+}
+
 .harvest-card { transition: all 0.25s ease; }
 .harvest-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.08);
+}
+
+.light-theme .harvest-card:hover {
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.06);
 }
 
 .toggle-switch {
@@ -243,14 +315,22 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
+.light-theme .loading-shimmer {
+  background: linear-gradient(90deg, #dde4f0 25%, #eef2ff 50%, #dde4f0 75%);
+  background-size: 200% 100%;
+}
 
 .flower-node { cursor: pointer; transition: filter 0.2s, transform 0.2s; }
 .flower-node:hover { filter: brightness(1.3); }
 
-/* Point 12: dot grid is handled inline in Canvas.tsx */
 .canvas-grid {
   background-image: radial-gradient(circle, rgba(255,255,255,0.18) 1px, transparent 1px);
   background-size: 32px 32px;
+}
+
+/* Task 3: light canvas grid */
+.light-theme .canvas-grid {
+  background-image: radial-gradient(circle, rgba(0,0,0,0.13) 1px, transparent 1px);
 }
 
 .truncate-2 {
@@ -283,9 +363,3 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
   background: linear-gradient(90deg, #00ffff, #00bcd4);
   border-radius: 1px 1px 0 0;
 }
-
-@keyframes orbRing { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-@keyframes orbRingReverse { from { transform: rotate(360deg); } to { transform: rotate(0deg); } }
-.orb-ring-1 { animation: orbRing 8s linear infinite; }
-.orb-ring-2 { animation: orbRingReverse 12s linear infinite; }
-.orb-ring-3 { animation: orbRing 16s linear infinite; }
