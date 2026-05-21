@@ -26,11 +26,13 @@ export async function persistGenerationToSupabase(params: {
   } = params;
 
   try {
+    // Upsert project row
     await supabase.from('projects').upsert({
       id: projectId,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'id', ignoreDuplicates: false });
 
+    // Insert snapshot
     await supabase.from('garden_snapshots').insert({
       id: snapshotId,
       project_id: projectId,
@@ -39,6 +41,7 @@ export async function persistGenerationToSupabase(params: {
       created_at: new Date().toISOString(),
     });
 
+    // Insert flowers + petals
     for (const flower of flowers) {
       await supabase.from('flowers').insert({
         id: flower.id,
@@ -67,6 +70,7 @@ export async function persistGenerationToSupabase(params: {
       }
     }
 
+    // Insert connections
     for (const conn of connections) {
       await supabase.from('connections').insert({
         id: conn.id,
@@ -82,6 +86,7 @@ export async function persistGenerationToSupabase(params: {
       });
     }
 
+    // Insert reasoning logs
     for (const log of reasoningLogs) {
       await supabase.from('reasoning_logs').insert({
         id: log.id,
@@ -94,6 +99,7 @@ export async function persistGenerationToSupabase(params: {
       });
     }
 
+    // Insert harvest results
     for (const h of harvestResults) {
       await supabase.from('harvest_results').insert({
         id: h.id,
@@ -107,6 +113,7 @@ export async function persistGenerationToSupabase(params: {
       });
     }
 
+    // Insert model param snapshot
     await supabase.from('model_param_snapshots').insert({
       snapshot_id: snapshotId,
       project_id: projectId,
@@ -131,11 +138,13 @@ export async function logInteractionEvent(params: {
 }) {
   if (!supabase) return;
   try {
-    // Map event types to match schema constraint
-    const allowedEventTypes = ['delete_petal', 'delete_flower', 'manual_connect', 'replant_insight', 'param_change', 'zoom_change', 'view_reset'];
+    const allowedEventTypes = [
+      'delete_petal', 'delete_flower', 'manual_connect',
+      'replant_insight', 'param_change', 'zoom_change', 'view_reset',
+    ];
     const eventType = allowedEventTypes.includes(params.eventType)
       ? params.eventType
-      : 'param_change'; // safe fallback
+      : 'param_change';
 
     await supabase.from('interaction_events').insert({
       project_id: params.projectId,
@@ -146,5 +155,36 @@ export async function logInteractionEvent(params: {
     });
   } catch (err) {
     console.error('[Supabase] logInteractionEvent error:', err);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Upload helpers — persist upload metadata to Supabase
+// Note: actual file bytes are NOT stored in DB (free-tier safe)
+// Only the URL string is stored; images are fetched at generation time
+// ─────────────────────────────────────────────────────────────────────────────
+export async function persistUploadToSupabase(params: {
+  id: string;
+  projectId: string;
+  fileUrl: string;
+  fileType: 'image' | 'video';
+  thumbnailUrl?: string;
+  description?: string;
+  slot?: string;
+}) {
+  if (!supabase) return;
+  try {
+    await supabase.from('uploads').upsert({
+      id: params.id,
+      project_id: params.projectId,
+      file_url: params.fileUrl,
+      file_type: params.fileType,
+      thumbnail_url: params.thumbnailUrl ?? params.fileUrl,
+      description: params.description ?? '',
+      slot: params.slot ?? null,
+      created_at: new Date().toISOString(),
+    }, { onConflict: 'id', ignoreDuplicates: false });
+  } catch (err) {
+    console.error('[Supabase] persistUploadToSupabase error:', err);
   }
 }
