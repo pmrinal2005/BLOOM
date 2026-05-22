@@ -15,10 +15,6 @@ function getTabColor(tabType: string) {
   return map[tabType] ?? { main: '#00ffff', bg: 'rgba(0,255,255,0.09)', border: 'rgba(0,255,255,0.28)' };
 }
 
-/**
- * Task 5: Read More modal — rendered via React Portal directly into document.body.
- * This guarantees it floats above EVERYTHING including the harvest panel (z-index 20).
- */
 function ReadMoreModal({ result, onClose }: { result: HarvestResult; onClose: () => void }) {
   const color = getTabColor(result.tab_type);
   const { theme } = useStore();
@@ -29,43 +25,28 @@ function ReadMoreModal({ result, onClose }: { result: HarvestResult; onClose: ()
     window.addEventListener('keydown', handler);
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    return () => {
-      window.removeEventListener('keydown', handler);
-      document.body.style.overflow = prev;
-    };
+    return () => { window.removeEventListener('keydown', handler); document.body.style.overflow = prev; };
   }, [onClose]);
 
   const modalContent = (
     <div
       onClick={onClose}
       style={{
-        position: 'fixed',
-        top: 0, left: 0, right: 0, bottom: 0,
-        zIndex: 99999,   // above everything
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'rgba(0,0,0,0.85)',
-        backdropFilter: 'blur(10px)',
-        padding: '20px 16px',
+        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)', padding: '20px 16px',
       }}
     >
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          width: '100%',
-          maxWidth: 680,
-          maxHeight: '85vh',
-          borderRadius: 18,
+          width: '100%', maxWidth: 680, maxHeight: '85vh', borderRadius: 18,
           background: isDark ? 'rgba(9,13,24,0.99)' : 'rgba(255,255,255,0.99)',
           border: `1px solid ${color.border}`,
           boxShadow: `0 0 80px ${color.main}20, 0 20px 60px rgba(0,0,0,0.5)`,
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
+          display: 'flex', flexDirection: 'column', overflow: 'hidden',
         }}
       >
-        {/* Modal header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '20px 24px 16px', borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)'}`, flexShrink: 0 }}>
           <div style={{ flex: 1, minWidth: 0, paddingRight: 16 }}>
             <span style={{ display: 'inline-block', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', color: color.main, background: color.bg, border: `1px solid ${color.border}`, borderRadius: 6, padding: '2px 8px', marginBottom: 10 }}>
@@ -85,8 +66,6 @@ function ReadMoreModal({ result, onClose }: { result: HarvestResult; onClose: ()
             <X size={16} strokeWidth={2.5} />
           </button>
         </div>
-
-        {/* Modal body — scrollable */}
         <div style={{ overflowY: 'auto', padding: '20px 24px 24px', flex: 1, minHeight: 0 }}>
           {(result.content?.paragraphs ?? []).length > 0 && (
             <div style={{ marginBottom: 20 }}>
@@ -95,7 +74,6 @@ function ReadMoreModal({ result, onClose }: { result: HarvestResult; onClose: ()
               ))}
             </div>
           )}
-
           {(result.content?.key_points ?? []).length > 0 && (
             <div>
               <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.35)', textTransform: 'uppercase', margin: '0 0 14px' }}>KEY POINTS</p>
@@ -112,8 +90,6 @@ function ReadMoreModal({ result, onClose }: { result: HarvestResult; onClose: ()
               ))}
             </div>
           )}
-
-          {/* Empty state */}
           {(result.content?.paragraphs ?? []).length === 0 && (result.content?.key_points ?? []).length === 0 && (
             <p style={{ fontSize: 13, color: isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.35)', textAlign: 'center', margin: '24px 0' }}>No detailed content available.</p>
           )}
@@ -122,105 +98,136 @@ function ReadMoreModal({ result, onClose }: { result: HarvestResult; onClose: ()
     </div>
   );
 
-  // Task 5: Portal renders outside harvest panel DOM tree → no z-index conflicts
   return createPortal(modalContent, document.body);
 }
 
-/**
- * Task 4: HarvestCard — no overflow ever.
- * Fixed flex column layout with text clamping and pinned buttons.
- */
+// Task 3: Fixed card — strict height control, buttons always visible
 function HarvestCard({ result, onReplant }: { result: HarvestResult; onReplant: (r: HarvestResult) => void }) {
   const [modalOpen, setModalOpen] = useState(false);
   const { theme } = useStore();
   const isDark = theme === 'dark';
   const color = getTabColor(result.tab_type);
 
-  const cardBg = isDark ? 'rgba(255,255,255,0.025)' : 'rgba(255,255,255,0.9)';
+  // Task 1: Theme-aware card colors
+  const cardBg = isDark ? 'rgba(255,255,255,0.025)' : 'rgba(255,255,255,0.92)';
   const titleColor = isDark ? 'rgba(255,255,255,0.88)' : 'rgba(0,0,0,0.85)';
-  const summaryColor = isDark ? 'rgba(255,255,255,0.48)' : 'rgba(0,0,0,0.55)';
-  const pointColor = isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.6)';
+  const summaryColor = isDark ? 'rgba(255,255,255,0.48)' : 'rgba(0,0,0,0.58)';
+  const pointColor = isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.62)';
 
   return (
     <>
-      {/* Task 4: Card with strict flex column, no overflow */}
+      {/* Task 3: Strict no-overflow card using flex column with fixed widths */}
       <div style={{
-        width: 236,
-        minWidth: 236,
-        maxWidth: 236,
+        width: 230,
+        minWidth: 230,
+        maxWidth: 230,
         flexShrink: 0,
         display: 'flex',
         flexDirection: 'column',
         background: cardBg,
         border: `1px solid ${color.border}`,
         borderRadius: 11,
-        padding: '10px 11px',
+        padding: '10px 11px 10px',
         boxSizing: 'border-box',
-        overflow: 'hidden',       // prevent any child from escaping
-        height: '100%',
-        minHeight: 0,
+        overflow: 'hidden',
+        alignSelf: 'stretch',
       }}>
         {/* Badge */}
-        <div style={{ flexShrink: 0, marginBottom: 7 }}>
-          <span style={{ display: 'inline-block', fontSize: 7.5, fontWeight: 700, letterSpacing: '0.08em', color: color.main, background: color.bg, border: `1px solid ${color.border}`, borderRadius: 4, padding: '1.5px 6px' }}>
+        <div style={{ flexShrink: 0, marginBottom: 6 }}>
+          <span style={{
+            display: 'inline-block', fontSize: 7.5, fontWeight: 700,
+            letterSpacing: '0.08em', color: color.main,
+            background: color.bg, border: `1px solid ${color.border}`,
+            borderRadius: 4, padding: '1.5px 6px',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            maxWidth: '100%',
+          }}>
             {result.tab_type.toUpperCase()}
           </span>
         </div>
 
         {/* Title — max 2 lines */}
-        <div style={{ flexShrink: 0, marginBottom: 6, overflow: 'hidden' }}>
-          <h4 style={{ color: titleColor, fontSize: 10.5, fontWeight: 700, margin: 0, lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+        <div style={{ flexShrink: 0, marginBottom: 5, overflow: 'hidden' }}>
+          <h4 style={{
+            color: titleColor, fontSize: 10.5, fontWeight: 700, margin: 0,
+            lineHeight: 1.35,
+            display: '-webkit-box', WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical', overflow: 'hidden',
+          }}>
             {result.title}
           </h4>
         </div>
 
-        {/* Summary — max 3 lines */}
-        <div style={{ flexShrink: 0, marginBottom: 8, overflow: 'hidden' }}>
-          <p style={{ color: summaryColor, fontSize: 9.5, lineHeight: 1.5, margin: 0, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+        {/* Summary — max 2 lines */}
+        <div style={{ flexShrink: 0, marginBottom: 7, overflow: 'hidden' }}>
+          <p style={{
+            color: summaryColor, fontSize: 9, lineHeight: 1.45, margin: 0,
+            display: '-webkit-box', WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical', overflow: 'hidden',
+          }}>
             {result.summary}
           </p>
         </div>
 
-        {/* Key points — max 2, each max 2 lines */}
-        <div style={{ flexShrink: 0, marginBottom: 8, overflow: 'hidden' }}>
+        {/* Key points — max 2, each 1 line */}
+        <div style={{ flexShrink: 0, marginBottom: 7, overflow: 'hidden' }}>
           {(result.content?.key_points ?? []).slice(0, 2).map((pt: string, i: number) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginBottom: i < 1 ? 5 : 0, overflow: 'hidden' }}>
-              <div style={{ width: 4, height: 4, borderRadius: '50%', marginTop: 5, flexShrink: 0, background: color.main, boxShadow: `0 0 3px ${color.main}` }} />
-              <span style={{ color: pointColor, fontSize: 9, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{pt}</span>
+            <div key={i} style={{
+              display: 'flex', alignItems: 'flex-start', gap: 5,
+              marginBottom: i < 1 ? 4 : 0, overflow: 'hidden',
+            }}>
+              <div style={{
+                width: 4, height: 4, borderRadius: '50%', marginTop: 4,
+                flexShrink: 0, background: color.main,
+                boxShadow: `0 0 3px ${color.main}`,
+              }} />
+              <span style={{
+                color: pointColor, fontSize: 8.5, lineHeight: 1.35,
+                display: '-webkit-box', WebkitLineClamp: 1,
+                WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                flex: 1, minWidth: 0,
+              }}>{pt}</span>
             </div>
           ))}
         </div>
 
-        {/* Spacer pushes buttons to bottom */}
-        <div style={{ flex: 1, minHeight: 4 }} />
+        {/* Spacer */}
+        <div style={{ flex: 1, minHeight: 2 }} />
 
-        {/* Buttons — always visible, never overflow */}
-        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+        {/* Buttons — always at bottom, never overflow */}
+        <div style={{
+          display: 'flex', gap: 5, flexShrink: 0,
+          paddingTop: 6,
+          borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`,
+        }}>
           <button
             onClick={() => setModalOpen(true)}
             style={{
               flex: 1, minWidth: 0,
-              padding: '6px 4px', borderRadius: 7, fontSize: 9, fontWeight: 600,
+              padding: '6px 2px', borderRadius: 7, fontSize: 8.5, fontWeight: 600,
               background: color.bg, border: `1px solid ${color.border}`,
               color: color.main, cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3,
               transition: 'background 0.15s',
               whiteSpace: 'nowrap', overflow: 'hidden',
+              boxSizing: 'border-box',
             }}
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${color.main}22`; }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = color.bg; }}
           >
-            <ExternalLink size={8} /> Read More
+            <ExternalLink size={8} />
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>Read More</span>
           </button>
           <button
             onClick={() => onReplant(result)}
             style={{
               flex: 1, minWidth: 0,
-              padding: '6px 4px', borderRadius: 7, fontSize: 9, fontWeight: 600,
+              padding: '6px 2px', borderRadius: 7, fontSize: 8.5, fontWeight: 600,
               background: 'rgba(57,255,20,0.07)', border: '1px solid rgba(57,255,20,0.26)',
-              color: isDark ? '#39ff14' : '#22aa00',
+              color: isDark ? '#39ff14' : '#1a7700',
               cursor: 'pointer', transition: 'background 0.15s',
               whiteSpace: 'nowrap', overflow: 'hidden',
+              boxSizing: 'border-box',
             }}
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(57,255,20,0.18)'; }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(57,255,20,0.07)'; }}
@@ -263,7 +270,11 @@ export default function HarvestPanel({ onReplant }: Props) {
       const maxH = (window.innerHeight * MAX_HARVEST_HEIGHT_VH) / 100;
       setHarvestHeight(Math.max(MIN_HARVEST_HEIGHT, Math.min(maxH, dragStartH.current + delta)));
     };
-    const onUp = () => { dragRef.current = false; window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+    const onUp = () => {
+      dragRef.current = false;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
   }, [harvestHeight, setHarvestHeight]);
@@ -277,14 +288,17 @@ export default function HarvestPanel({ onReplant }: Props) {
 
   const displayHeight = minimized ? 48 : Math.max(MIN_HARVEST_HEIGHT, harvestHeight);
 
-  const panelBg = isDark ? 'rgba(8,12,24,0.97)' : 'rgba(248,250,255,0.97)';
+  // Task 1: Theme-aware panel
+  const panelBg = isDark ? 'rgba(8,12,24,0.97)' : 'rgba(250,252,255,0.98)';
   const panelBorder = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.1)';
-  const headerColor = isDark ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.8)';
+  const headerColor = isDark ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.82)';
   const countBg = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
-  const countColor = isDark ? 'rgba(255,255,255,0.32)' : 'rgba(0,0,0,0.4)';
+  const countColor = isDark ? 'rgba(255,255,255,0.32)' : 'rgba(0,0,0,0.42)';
   const btnBg = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
   const btnBorder = isDark ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.1)';
-  const btnColor = isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.5)';
+  const btnColor = isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.52)';
+  const dragHandleColor = isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.15)';
+  const emptyColor = isDark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.3)';
 
   return (
     <div
@@ -298,7 +312,7 @@ export default function HarvestPanel({ onReplant }: Props) {
         zIndex: 20,
         display: 'flex', flexDirection: 'column',
         transition: 'height 0.22s cubic-bezier(0.4,0,0.2,1)',
-        boxShadow: '0 -4px 30px rgba(0,0,0,0.35)',
+        boxShadow: isDark ? '0 -4px 30px rgba(0,0,0,0.35)' : '0 -4px 20px rgba(0,0,0,0.1)',
         boxSizing: 'border-box',
         overflow: 'hidden',
       }}
@@ -308,7 +322,13 @@ export default function HarvestPanel({ onReplant }: Props) {
         onMouseDown={minimized ? undefined : onDragStart}
         style={{ height: 6, flexShrink: 0, background: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)', borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.05)'}`, cursor: minimized ? 'default' : 'row-resize', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       >
-        {!minimized && <div style={{ display: 'flex', gap: 4 }}>{[0,1,2].map(i => <div key={i} style={{ width: 24, height: 2, borderRadius: 2, background: isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.15)' }} />)}</div>}
+        {!minimized && (
+          <div style={{ display: 'flex', gap: 4 }}>
+            {[0, 1, 2].map(i => (
+              <div key={i} style={{ width: 24, height: 2, borderRadius: 2, background: dragHandleColor }} />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Header */}
@@ -354,13 +374,13 @@ export default function HarvestPanel({ onReplant }: Props) {
             })}
           </div>
 
-          {/* Task 4: Cards container — fixed height, horizontal scroll, cards fill height */}
+          {/* Task 3: Cards container — fixed row height, no vertical overflow */}
           <div style={{
             flex: 1,
             display: 'flex',
             alignItems: 'stretch',
             gap: 10,
-            padding: '10px 14px 10px',
+            padding: '10px 14px',
             overflowX: 'auto',
             overflowY: 'hidden',
             minHeight: 0,
@@ -369,7 +389,7 @@ export default function HarvestPanel({ onReplant }: Props) {
             scrollbarColor: isDark ? 'rgba(255,255,255,0.12) transparent' : 'rgba(0,0,0,0.12) transparent',
           }}>
             {filteredResults.length === 0 ? (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', color: isDark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.3)', fontSize: 11 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', color: emptyColor, fontSize: 11 }}>
                 {generationStatus === 'loading' ? 'Generating insights...' : activeHarvestTab !== 'All' ? `No ${activeHarvestTab} results.` : 'No harvest results yet.'}
               </div>
             ) : (

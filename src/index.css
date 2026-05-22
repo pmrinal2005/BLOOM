@@ -24,9 +24,9 @@
   --accent-purple: #b400ff;
 }
 
-/* ── Task 3: Light theme CSS variables ── */
+/* ── Light theme CSS variables ── */
 .light-theme {
-  --bg-primary: #f0f4ff;
+  --bg-primary: #eef2ff;
   --bg-secondary: #e6ecf8;
   --bg-panel: #ffffff;
   --bg-card: #f5f7ff;
@@ -53,21 +53,21 @@ html, body, #root {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: var(--bg-primary);
   color: var(--text-primary);
-  /* Task 3: smooth theme transition */
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* Task 3: Light theme text clarity — force legible colors on all text */
-.light-theme {
-  color: #0a0e1a;
+/* ── Task 1: Comprehensive light theme overrides ── */
+
+/* SVG canvas background in light mode */
+.light-theme svg[class*="w-full"] {
+  background: transparent;
 }
 
-.light-theme p,
-.light-theme span,
-.light-theme h1, .light-theme h2, .light-theme h3, .light-theme h4, .light-theme h5,
-.light-theme label,
-.light-theme div {
-  /* Don't force override — rely on component-level color values */
+/* Canvas dot grid in light mode */
+.light-theme .canvas-bg,
+.light-theme [style*="background: '#080d18'"],
+.light-theme [style*="background: #080d18"] {
+  background-color: #eef2ff !important;
 }
 
 /* Custom scrollbar */
@@ -199,7 +199,6 @@ html, body, #root {
     radial-gradient(circle at 75% 75%, rgba(180,0,255,0.015) 0%, transparent 50%);
 }
 
-/* Task 3: Light canvas */
 .light-theme .canvas-bg {
   background-color: #eef2ff;
   background-image:
@@ -216,9 +215,8 @@ html, body, #root {
   border: 1px solid rgba(255,255,255,0.06);
 }
 
-/* Task 3: light panel glass */
 .light-theme .panel-glass {
-  background: rgba(255,255,255,0.96);
+  background: rgba(255,255,255,0.97);
   border: 1px solid rgba(0,0,0,0.08);
 }
 
@@ -226,7 +224,6 @@ html, body, #root {
 .neon-green { color: #39ff14; text-shadow: 0 0 10px rgba(57,255,20,0.6); }
 .neon-pink { color: #ff10f0; text-shadow: 0 0 10px rgba(255,16,240,0.6); }
 
-/* Task 3: light mode neon toned down for legibility */
 .light-theme .neon-cyan { color: #007799; text-shadow: none; }
 .light-theme .neon-green { color: #1a8800; text-shadow: none; }
 .light-theme .neon-pink { color: #990099; text-shadow: none; }
@@ -249,6 +246,9 @@ input[type="range"]::-webkit-slider-thumb {
   cursor: pointer;
   transition: all 0.2s;
   border: 2px solid #080d18;
+}
+.light-theme input[type="range"]::-webkit-slider-thumb {
+  border: 2px solid #eef2ff;
 }
 input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
 
@@ -274,7 +274,6 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
   font-weight: 500;
 }
 
-/* Task 3: light mode highlight */
 .light-theme .highlight-text {
   background: rgba(0,120,180,0.12);
   color: #005577;
@@ -285,28 +284,18 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
   transform: translateY(-2px);
   box-shadow: 0 8px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.08);
 }
-
 .light-theme .harvest-card:hover {
   box-shadow: 0 8px 24px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.06);
 }
 
 .toggle-switch {
-  position: relative;
-  width: 44px;
-  height: 24px;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: background 0.3s;
+  position: relative; width: 44px; height: 24px;
+  border-radius: 12px; cursor: pointer; transition: background 0.3s;
 }
 .toggle-knob {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: white;
-  transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+  position: absolute; top: 2px; left: 2px;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: white; transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
   box-shadow: 0 2px 4px rgba(0,0,0,0.3);
 }
 
@@ -327,8 +316,6 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
   background-image: radial-gradient(circle, rgba(255,255,255,0.18) 1px, transparent 1px);
   background-size: 32px 32px;
 }
-
-/* Task 3: light canvas grid */
 .light-theme .canvas-grid {
   background-image: radial-gradient(circle, rgba(0,0,0,0.13) 1px, transparent 1px);
 }
@@ -343,23 +330,16 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
 .panel-transition { transition: width 0.3s cubic-bezier(0.4,0,0.2,1), opacity 0.3s ease; }
 
 .harvest-tab {
-  position: relative;
-  padding: 8px 16px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: color 0.2s;
-  white-space: nowrap;
-  background: none;
-  border: none;
+  position: relative; padding: 8px 16px; font-size: 13px;
+  font-weight: 500; cursor: pointer; transition: color 0.2s;
+  white-space: nowrap; background: none; border: none;
 }
 .harvest-tab.active::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  content: ''; position: absolute; bottom: 0; left: 0; right: 0;
   height: 2px;
   background: linear-gradient(90deg, #00ffff, #00bcd4);
   border-radius: 1px 1px 0 0;
+}
+.light-theme .harvest-tab.active::after {
+  background: linear-gradient(90deg, #0088aa, #0066aa);
 }

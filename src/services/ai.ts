@@ -89,32 +89,73 @@ function generateColorFromName(name: string, usedColors: Set<string>): string {
   return pool[h % pool.length];
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Image processing: fetch URL → base64 inline data part
-// Handles blob: URLs (local object URLs from file uploads) and http/https URLs
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Task 2: Compute petal count diversity weights ──
+// Returns a weighted probability array for petal counts 1-8
+// based on what's already been used: less-used counts get higher weight
+function computePetalWeights(existingFlowers: Flower[]): number[] {
+  const counts = new Array(9).fill(0); // index 0 unused, 1-8
+  for (const f of existingFlowers) {
+    const pc = Math.max(1, Math.min(8, f.petals.length));
+    counts[pc]++;
+  }
+  const total = existingFlowers.length || 1;
+  // Weight = inverse of relative frequency, boosted for counts not yet used
+  const weights: number[] = new Array(9).fill(0);
+  for (let i = 1; i <= 8; i++) {
+    const freq = counts[i] / total;
+    // Give unused counts weight 3.0, heavily used counts minimum 0.1
+    weights[i] = Math.max(0.1, 3.0 - freq * 8);
+  }
+  return weights;
+}
+
+// Format diversity guidance for the AI prompt
+function formatPetalDiversityGuidance(existingFlowers: Flower[]): string {
+  if (existingFlowers.length === 0) {
+    return `PETAL DIVERSITY: This is the first generation. Distribute petal counts across the full 1-8 range. Example: some flowers with 1-2 petals (peripheral), some with 3-5 (mid), some with 6-8 (central/rich).`;
+  }
+
+  const counts = new Map<number, number>();
+  for (const f of existingFlowers) {
+    const pc = Math.max(1, Math.min(8, f.petals.length));
+    counts.set(pc, (counts.get(pc) ?? 0) + 1);
+  }
+
+  const used = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+  const unused = [1, 2, 3, 4, 5, 6, 7, 8].filter(n => !counts.has(n));
+  const overused = used.filter(([, c]) => c >= 2).map(([n]) => n);
+  const underused = used.filter(([, c]) => c === 1).map(([n]) => n);
+
+  const lines: string[] = [
+    `PETAL DIVERSITY (existing state):`,
+    `  Current distribution: ${used.map(([n, c]) => `${n} petals ×${c}`).join(', ')}`,
+  ];
+  if (unused.length > 0) {
+    lines.push(`  PREFERRED counts (not yet used): [${unused.join(', ')}] — strongly prefer these`);
+  }
+  if (underused.length > 0) {
+    lines.push(`  OK counts (used once): [${underused.join(', ')}]`);
+  }
+  if (overused.length > 0) {
+    lines.push(`  DISCOURAGED counts (used 2+ times): [${overused.join(', ')}] — avoid if possible, but may use if truly necessary`);
+  }
+  lines.push(`  Goal: maximize spread. If all 1-8 are used, repeat least-used counts only.`);
+  return lines.join('\n');
+}
+
 async function urlToInlineDataPart(
-  url: string,
-  label: string
+  url: string, label: string
 ): Promise<{ inlineData: { data: string; mimeType: string } } | null> {
   try {
-    // Skip empty or obviously invalid URLs
     if (!url || url.trim() === '') return null;
-
     console.log(`[AI] Fetching image for inline data: ${label} — ${url.substring(0, 60)}…`);
-
     const response = await fetch(url);
     if (!response.ok) {
-      console.warn(`[AI] Could not fetch image [${label}]: ${response.status} ${response.statusText} — skipping`);
+      console.warn(`[AI] Could not fetch image [${label}]: ${response.status} — skipping`);
       return null;
     }
-
-    // Detect mime type from response headers, fallback by URL extension, then default
     let mimeType = response.headers.get('content-type') ?? '';
-    // Strip parameters like "; charset=utf-8"
     if (mimeType.includes(';')) mimeType = mimeType.split(';')[0].trim();
-
-    // If content-type is not an image type, infer from URL
     if (!mimeType.startsWith('image/') && !mimeType.startsWith('video/')) {
       const urlLower = url.toLowerCase().split('?')[0];
       if (urlLower.endsWith('.png')) mimeType = 'image/png';
@@ -122,25 +163,15 @@ async function urlToInlineDataPart(
       else if (urlLower.endsWith('.gif')) mimeType = 'image/gif';
       else if (urlLower.endsWith('.jpg') || urlLower.endsWith('.jpeg')) mimeType = 'image/jpeg';
       else if (urlLower.endsWith('.mp4')) mimeType = 'video/mp4';
-      else mimeType = 'image/jpeg'; // safe default
+      else mimeType = 'image/jpeg';
     }
-
     const arrayBuffer = await response.arrayBuffer();
-    if (arrayBuffer.byteLength === 0) {
-      console.warn(`[AI] Empty response body for [${label}] — skipping`);
-      return null;
-    }
-
-    // Convert ArrayBuffer → Base64 string
-    // Works in both browser (Uint8Array → btoa) and Node (Buffer)
+    if (arrayBuffer.byteLength === 0) return null;
     const uint8Array = new Uint8Array(arrayBuffer);
     let base64Data: string;
-
     if (typeof Buffer !== 'undefined') {
-      // Node.js environment
       base64Data = Buffer.from(arrayBuffer).toString('base64');
     } else {
-      // Browser environment
       let binary = '';
       const chunkSize = 8192;
       for (let i = 0; i < uint8Array.length; i += chunkSize) {
@@ -149,75 +180,42 @@ async function urlToInlineDataPart(
       }
       base64Data = btoa(binary);
     }
-
-    console.log(`[AI] Successfully encoded [${label}]: ${mimeType}, ${Math.round(arrayBuffer.byteLength / 1024)}KB`);
-
-    return {
-      inlineData: {
-        data: base64Data,
-        mimeType,
-      },
-    };
+    return { inlineData: { data: base64Data, mimeType } };
   } catch (err: any) {
-    // Non-fatal: log and skip this image rather than failing the whole request
     console.warn(`[AI] Failed to process image [${label}]:`, err?.message ?? err);
     return null;
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Build multimodal content parts array for Gemma 4
-// Images FIRST, text context LAST — as recommended by DeepMind guidelines
-// Handles all 4 cases: problem+inspiration, partial, inspiration-only, text-only
-// ─────────────────────────────────────────────────────────────────────────────
 async function buildMultimodalParts(
-  payload: GenerationPayload,
-  textPrompt: string
+  payload: GenerationPayload, textPrompt: string
 ): Promise<Array<{ text: string } | { inlineData: { data: string; mimeType: string } }>> {
   const parts: Array<{ text: string } | { inlineData: { data: string; mimeType: string } }> = [];
-
   let hasAnyImage = false;
 
-  // ── Case 1 & 2: Problem Matrix (0 or 1 image) ──
   if (payload.problemUploadUrl && payload.problemUploadUrl.trim() !== '') {
     const problemPart = await urlToInlineDataPart(payload.problemUploadUrl, 'Problem Matrix');
     if (problemPart) {
       parts.push({ text: '=== PROBLEM MATRIX VISUAL CONTEXT ===' });
       parts.push(problemPart);
       hasAnyImage = true;
-      console.log('[AI] Problem Matrix image attached to payload');
     }
   }
 
-  // ── Case 2 & 3: Inspiration Matrices (0–4 images) ──
-  const cleanInspirationUrls = (payload.inspirationUrls ?? [])
-    .filter(u => u && u.trim() !== '')
-    .slice(0, 4); // enforce max 4
-
+  const cleanInspirationUrls = (payload.inspirationUrls ?? []).filter(u => u && u.trim() !== '').slice(0, 4);
   if (cleanInspirationUrls.length > 0) {
     parts.push({ text: `=== INSPIRATION MATRIX REFERENCE VISUALS (${cleanInspirationUrls.length} provided) ===` });
-
     for (let i = 0; i < cleanInspirationUrls.length; i++) {
-      const inspirationPart = await urlToInlineDataPart(
-        cleanInspirationUrls[i],
-        `Inspiration Matrix ${i + 1}`
-      );
+      const inspirationPart = await urlToInlineDataPart(cleanInspirationUrls[i], `Inspiration Matrix ${i + 1}`);
       if (inspirationPart) {
         parts.push({ text: `[Inspiration Reference Asset #${i + 1}]` });
         parts.push(inspirationPart);
         hasAnyImage = true;
       }
     }
-
-    if (hasAnyImage) {
-      console.log(`[AI] ${cleanInspirationUrls.length} inspiration image(s) processed`);
-    }
   }
 
-  // ── Case 4 / All cases: Text context always appended LAST ──
-  // Per DeepMind guidelines: text context at end of multimodal sequence
   if (hasAnyImage) {
-    // Append visual analysis instruction before the main prompt
     parts.push({
       text: `Based on the contextual visuals provided above, perform a deep architectural analysis. 
 Analyze structural patterns, visual layouts, and cross-reference the Problem Matrix with any Inspiration Matrix images. 
@@ -226,11 +224,9 @@ Extract design principles, color systems, spatial arrangements, and emergent con
 ${textPrompt}`,
     });
   } else {
-    // Case 4: Text-only — no images found or provided
     parts.push({ text: textPrompt });
   }
 
-  console.log(`[AI] Multimodal parts built: ${parts.length} total (images: ${hasAnyImage})`);
   return parts;
 }
 
@@ -238,17 +234,21 @@ function buildSystemInstruction(
   growthMode: GrowthMode,
   modelParams: ModelParams,
   showReasoning: boolean,
-  creativityLevel: number
+  creativityLevel: number,
+  existingFlowers: Flower[] = []
 ): string {
   const normalized = normalizeModelParams(modelParams, creativityLevel);
 
   const creativityDesc = creativityLevel > 0.75
-    ? 'VERY HIGH CREATIVITY: Generate highly unexpected, lateral, metaphorical connections across very distant domains. Be bold and surprising.'
+    ? 'VERY HIGH CREATIVITY: Generate highly unexpected, lateral, metaphorical connections across very distant domains.'
     : creativityLevel > 0.5
     ? 'MEDIUM-HIGH CREATIVITY: Mix familiar and novel connections. Introduce cross-domain analogies.'
     : creativityLevel > 0.35
     ? 'MODERATE CREATIVITY: Balance direct relevance with some lateral thinking.'
     : 'LOW CREATIVITY: Stay close to the literal problem domain. Be direct and practical.';
+
+  // Task 2: dynamic petal diversity guidance
+  const petalDiversityGuidance = formatPetalDiversityGuidance(existingFlowers);
 
   return `You are the core design orchestration engine for ExpertBloom, an interactive concept-mapping platform.
 
@@ -261,7 +261,6 @@ VISUAL ANALYSIS CAPABILITY:
 - You may receive visual inputs (Problem Matrix and/or Inspiration Matrix images)
 - When images are provided: analyze their visual structure, patterns, color systems, spatial arrangements, and emergent concepts
 - Extract meaningful design principles from the visuals to inform concept generation
-- Cross-reference Problem Matrix visuals with Inspiration Matrix references to find analogies
 - When no images are provided: rely entirely on the text description
 
 STRICT OUTPUT CONTRACT:
@@ -277,19 +276,23 @@ UNIQUENESS RULES — CRITICAL:
 - color_theme: one of cyan, green, pink, orange, blue, purple, yellow
 - Assign different color_theme to each flower when possible
 - 1 to 8 flowers total
-- sub_entity_name: max 4 words
+- sub_entity_name: max 8 words
 
-PETAL COUNT DIVERSITY RULES — CRITICAL:
-- Each flower MUST have a DIFFERENT number of petals from other flowers
-- Use the full range: some flowers 1-2 petals (peripheral), others 5-8 petals (central/rich)
-- NEVER give all or most flowers the same petal count
-- Central/core concepts → more petals (5-8); Supporting/peripheral → fewer petals (1-3)
+${petalDiversityGuidance}
+
+PETAL COUNT RULES:
+- Each new flower should PREFER petal counts that are underrepresented in the existing garden
+- If a count hasn't been used yet: weight it STRONGLY (3x preference)
+- If a count has been used once: it's acceptable
+- If a count has been used 2+ times: avoid unless no better option
+- Do NOT enforce strict uniqueness — diversity is the goal, not a hard constraint
+- You CAN repeat a petal count if conceptually necessary, but try to minimize repetition
 
 REASONING:
 ${showReasoning ? 'reasoning_stream: 3-15 steps based on complexity. Reference visual observations when images were analyzed.' : 'reasoning_stream: empty array []'}
 
 HARVEST PANEL:
-- 1-4 items, only include tab_types relevant to the domain
+- 1-8 items, only include tab_types relevant to the domain
 - tab_type values: "Core Insights", "Generated Artifacts", "Future Scenarios", "Flow Analysis"
 - Each tab_type at most once
 
@@ -321,19 +324,19 @@ function buildTextPrompt(payload: GenerationPayload): string {
   if (payload.problemDescription?.trim())
     parts.push(`PROBLEM DOMAIN: "${payload.problemDescription.trim()}"`);
 
-  // Note: image URLs are processed separately as inline data parts
-  // We still mention their presence for context
   if (payload.problemUploadUrl)
     parts.push(`[Problem Matrix image has been provided and processed above for visual analysis]`);
 
   if ((payload.inspirationUrls ?? []).filter(u => u).length > 0)
-    parts.push(`[${payload.inspirationUrls.filter(u => u).length} Inspiration Matrix image(s) have been provided and processed above for visual analysis]`);
+    parts.push(`[${payload.inspirationUrls.filter(u => u).length} Inspiration Matrix image(s) have been provided and processed above]`);
 
   if (payload.existingFlowers && payload.existingFlowers.length > 0) {
     const names = payload.existingFlowers.map(f => `"${f.entity_name}"`).join(', ');
     const ids = payload.existingFlowers.map(f => f.id).join(', ');
+    const petalInfo = payload.existingFlowers.map(f => `"${f.entity_name}": ${f.petals.length} petals`).join(', ');
     parts.push(`EXISTING ENTITIES — PRESERVE, do NOT duplicate names: [${names}]`);
     parts.push(`Existing IDs for connections: [${ids}]`);
+    parts.push(`Existing petal counts: [${petalInfo}]`);
   }
 
   if (payload.deletedEntities && payload.deletedEntities.length > 0)
@@ -345,16 +348,13 @@ function buildTextPrompt(payload: GenerationPayload): string {
 
   parts.push(
     payload.existingFlowers?.length
-      ? `CONTEXT-AWARE UPDATE: Preserve existing flowers. Add NEW flowers with UNIQUE names. Ensure petal counts vary across flowers (1-8, no two same count). Return JSON only.`
-      : `INITIAL GENERATION: All flower names must be unique. Each flower must have a DIFFERENT petal count (distribute across 1-8 based on concept complexity). Return JSON only, start with {.`
+      ? `CONTEXT-AWARE UPDATE: Preserve existing flowers. Add NEW flowers with UNIQUE names. Prefer petal counts not yet represented in the garden. Return JSON only.`
+      : `INITIAL GENERATION: All flower names must be unique. Distribute petal counts across 1-8 range — maximize diversity. Return JSON only, start with {.`
   );
 
   return parts.join('\n');
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Main API call — now multimodal
-// ─────────────────────────────────────────────────────────────────────────────
 async function callGeminiAPI(payload: GenerationPayload, textPrompt: string): Promise<string> {
   if (!GOOGLE_AI_API_KEY || !ai) {
     throw new APIKeyError('No Google AI API key configured. Please add VITE_GOOGLE_AI_API_KEY to your environment.');
@@ -363,30 +363,16 @@ async function callGeminiAPI(payload: GenerationPayload, textPrompt: string): Pr
   const history = getHistory(payload.projectId);
   const normalized = normalizeModelParams(payload.modelParams, payload.creativityLevel);
 
-  console.log('[AI] Calling model:', MODEL_NAME);
-  console.log('[AI] Effective params — temp:', normalized.temperature.toFixed(3), 'topP:', normalized.topP.toFixed(3), 'topK:', normalized.topK);
-  console.log('[AI] Creativity level:', payload.creativityLevel);
-  console.log('[AI] Problem URL:', payload.problemUploadUrl ? 'present' : 'none');
-  console.log('[AI] Inspiration URLs:', (payload.inspirationUrls ?? []).filter(u => u).length);
-
-  // Build multimodal parts (fetch images → base64 inline data)
   const currentParts = await buildMultimodalParts(payload, textPrompt);
 
-  // For conversation history: only text-based turns are stored
-  // (base64 image data is NOT stored in history to avoid memory bloat)
-  // The current turn uses full multimodal parts; history turns use text only
   const userTurnForHistory: ConversationTurn = {
     role: 'user',
-    parts: [{ text: textPrompt }], // text-only version for history
+    parts: [{ text: textPrompt }],
   };
 
-  // Current request: history (text-only) + current multimodal parts
   const contentsForRequest = [
     ...history,
-    {
-      role: 'user' as const,
-      parts: currentParts,
-    },
+    { role: 'user' as const, parts: currentParts },
   ];
 
   let response: any;
@@ -396,10 +382,9 @@ async function callGeminiAPI(payload: GenerationPayload, textPrompt: string): Pr
       contents: contentsForRequest as any,
       config: {
         systemInstruction: buildSystemInstruction(
-          payload.growthMode,
-          payload.modelParams,
-          payload.showReasoning ?? true,
-          payload.creativityLevel
+          payload.growthMode, payload.modelParams,
+          payload.showReasoning ?? true, payload.creativityLevel,
+          payload.existingFlowers ?? []
         ),
         temperature: normalized.temperature,
         topP: normalized.topP,
@@ -408,27 +393,19 @@ async function callGeminiAPI(payload: GenerationPayload, textPrompt: string): Pr
       },
     });
   } catch (err: any) {
-    if (
-      err?.message?.includes('fetch') ||
-      err?.message?.includes('network') ||
-      err?.name === 'TypeError'
-    ) {
-      throw new NetworkError('Network error: Could not reach the AI service. Check your internet connection.');
+    if (err?.message?.includes('fetch') || err?.message?.includes('network') || err?.name === 'TypeError') {
+      throw new NetworkError('Network error: Could not reach the AI service.');
     }
-    throw new Error(`API error: ${err?.message ?? 'Unknown error from model'}`);
+    throw new Error(`API error: ${err?.message ?? 'Unknown error'}`);
   }
 
   const rawText = response.text ?? '';
-  if (!rawText.trim()) {
-    throw new ParseError('Model returned an empty response. Please try again.');
-  }
+  if (!rawText.trim()) throw new ParseError('Model returned an empty response.');
 
-  // Commit text-only turn to history (not the heavy base64 image data)
   history.push(userTurnForHistory);
   history.push({ role: 'model', parts: [{ text: rawText }] });
   if (history.length > 20) conversationHistories[payload.projectId] = history.slice(-20);
 
-  console.log('[AI] Response length:', rawText.length);
   return rawText;
 }
 
@@ -441,7 +418,7 @@ function extractJSON(rawText: string): any {
   const start = cleaned.indexOf('{');
   const end = cleaned.lastIndexOf('}');
   if (start === -1 || end === -1 || end <= start)
-    throw new ParseError('No valid JSON object found in model response. Please try again.');
+    throw new ParseError('No valid JSON object found in model response.');
 
   const jsonStr = cleaned.slice(start, end + 1);
   try { return JSON.parse(jsonStr); } catch (_) {}
@@ -468,7 +445,7 @@ async function processAPIResponse(
   const validColors = ['cyan', 'green', 'pink', 'orange', 'blue', 'purple', 'yellow'];
 
   if (!parsed.canvas_layout?.flowers?.length)
-    throw new ParseError('Model response contained no flowers. Please try again.');
+    throw new ParseError('Model response contained no flowers.');
 
   const existingNames = new Set(existingFlowers.map(f => f.entity_name.toLowerCase().trim()));
   const usedColors = new Set(existingFlowers.map(f => f.color_theme));
@@ -487,7 +464,7 @@ async function processAPIResponse(
   }
 
   if (rawFlowers.length === 0)
-    throw new ParseError('All flowers in model response were duplicates. Please try again.');
+    throw new ParseError('All flowers in model response were duplicates.');
 
   const flowers: Flower[] = rawFlowers.map((entity: any, i: number) => {
     const angle = (i / Math.max(rawFlowers.length, 1)) * Math.PI * 2 - Math.PI / 2;
@@ -569,13 +546,9 @@ async function processAPIResponse(
       created_at: now,
     }));
 
-  console.log('[AI] Result:', flowers.length, 'flowers,', connections.length, 'connections,', reasoningLogs.length, 'reasoning,', harvestResults.length, 'harvest');
   return { flowers, connections, reasoningLogs, harvestResults, snapshotId };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Main export
-// ─────────────────────────────────────────────────────────────────────────────
 export async function generateGarden(
   payload: GenerationPayload,
   onReasoningChunk: (log: ReasoningLog) => void
@@ -585,10 +558,9 @@ export async function generateGarden(
   const showReasoning = payload.showReasoning ?? true;
 
   if (!GOOGLE_AI_API_KEY || !ai) {
-    throw new APIKeyError('No Google AI API key configured. Please add VITE_GOOGLE_AI_API_KEY to your .env file.');
+    throw new APIKeyError('No Google AI API key configured.');
   }
 
-  // Build text prompt (image fetching happens inside callGeminiAPI → buildMultimodalParts)
   const textPrompt = buildTextPrompt(payload);
   const rawText = await callGeminiAPI(payload, textPrompt);
   const parsed = extractJSON(rawText);
@@ -607,9 +579,7 @@ export async function generateGarden(
     await logInteractionEvent({
       projectId: payload.projectId, snapshotId, eventType: 'param_change',
       payload: {
-        trigger: triggerType,
-        flower_count: result.flowers.length,
-        model: MODEL_NAME,
+        trigger: triggerType, flower_count: result.flowers.length, model: MODEL_NAME,
         has_problem_image: !!payload.problemUploadUrl,
         inspiration_image_count: (payload.inspirationUrls ?? []).filter(u => u).length,
       },

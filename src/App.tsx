@@ -6,12 +6,17 @@ import Canvas from './components/Canvas/Canvas';
 import RightPanel from './components/RightPanel/RightPanel';
 import HarvestPanel from './components/HarvestPanel/HarvestPanel';
 import StartGrowthButton from './components/StartGrowthButton';
+import LandingPage from './components/Landing/LandingPage';
 import { generateGarden, clearHistory, NetworkError, APIKeyError } from './services/ai';
 import { assignPositions } from './utils/layout';
 import { ReasoningLog, HarvestResult } from './store/useStore';
 import { logInteractionEvent } from './lib/supabase';
 
-function RetryPopup({ error, onRetry, onDismiss }: { error: { title: string; message: string; isNetwork: boolean }; onRetry: () => void; onDismiss: () => void }) {
+function RetryPopup({ error, onRetry, onDismiss }: {
+  error: { title: string; message: string; isNetwork: boolean };
+  onRetry: () => void;
+  onDismiss: () => void;
+}) {
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(10px)' }} onClick={onDismiss}>
       <div style={{ background: 'rgba(9,13,24,0.99)', border: `1px solid ${error.isNetwork ? 'rgba(255,60,60,0.45)' : 'rgba(255,165,0,0.45)'}`, borderRadius: 18, padding: '28px 32px', maxWidth: 420, width: '90%', boxShadow: `0 0 60px ${error.isNetwork ? 'rgba(255,60,60,0.15)' : 'rgba(255,165,0,0.12)'}` }} onClick={e => e.stopPropagation()}>
@@ -49,16 +54,20 @@ export default function App() {
     theme,
   } = useStore();
 
+  // Task 4: Landing page state
+  const [showLanding, setShowLanding] = useState(true);
+
   const [pulseBright, setPulseBright] = useState(false);
   const generationRef = useRef(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [retryPopup, setRetryPopup] = useState<{ title: string; message: string; isNetwork: boolean; retryFn: () => void } | null>(null);
+  const [retryPopup, setRetryPopup] = useState<{
+    title: string; message: string; isNetwork: boolean; retryFn: () => void;
+  } | null>(null);
   const canvasWrapperRef = useRef<HTMLDivElement>(null);
   const [harvestPanelHeightPx, setHarvestPanelHeightPx] = useState(0);
 
   const isDark = theme === 'dark';
 
-  // Apply theme class on mount
   useEffect(() => {
     if (theme === 'light') {
       document.documentElement.classList.add('light-theme');
@@ -100,7 +109,9 @@ export default function App() {
     const current = getCurrentInputFingerprint();
     const last = useStore.getState().lastGeneratedInput;
     if (!last) return current.description.length > 0;
-    return current.description !== last.description || current.problemUploadId !== last.problemUploadId || current.inspirationUploadIds !== last.inspirationUploadIds;
+    return current.description !== last.description
+      || current.problemUploadId !== last.problemUploadId
+      || current.inspirationUploadIds !== last.inspirationUploadIds;
   }, [getCurrentInputFingerprint]);
 
   const runGeneration = useCallback(async (incorporateExisting = false, triggerType = 'auto') => {
@@ -146,7 +157,12 @@ export default function App() {
         setHarvestVisible(previousState.harvestVisible);
         setGenerationStatus(previousState.flowers.length > 0 ? 'success' : 'idle');
         generationRef.current = false;
-        setRetryPopup({ title: 'No Results Generated', message: 'The model returned no concepts. Try adding more detail to your problem description.', isNetwork: false, retryFn: () => runGeneration(incorporateExisting, triggerType) });
+        setRetryPopup({
+          title: 'No Results Generated',
+          message: 'The model returned no concepts. Try adding more detail to your problem description.',
+          isNetwork: false,
+          retryFn: () => runGeneration(incorporateExisting, triggerType),
+        });
         return;
       }
 
@@ -193,14 +209,22 @@ export default function App() {
       const isAPIKey = err instanceof APIKeyError;
       setRetryPopup({
         title: isNetwork ? 'Connection Error' : isAPIKey ? 'API Key Required' : 'Generation Failed',
-        message: isAPIKey ? 'No API key configured. Please add VITE_GOOGLE_AI_API_KEY to your .env file.' : isNetwork ? 'Could not reach the AI service. Check your internet connection.' : err?.message || 'An unexpected error occurred. Your canvas has been restored.',
+        message: isAPIKey
+          ? 'No API key configured. Please add VITE_GOOGLE_AI_API_KEY to your .env file.'
+          : isNetwork
+          ? 'Could not reach the AI service. Check your internet connection.'
+          : err?.message || 'An unexpected error occurred. Your canvas has been restored.',
         isNetwork: isNetwork || isAPIKey,
-        retryFn: isAPIKey ? () => setRetryPopup(null) : () => { setRetryPopup(null); runGeneration(incorporateExisting, triggerType); },
+        retryFn: isAPIKey
+          ? () => setRetryPopup(null)
+          : () => { setRetryPopup(null); runGeneration(incorporateExisting, triggerType); },
       });
     } finally {
       generationRef.current = false;
     }
-  }, [projectId, addFlower, addConnection, setFlowers, setConnections, addReasoningLog, clearReasoningLogs, setHarvestResults, setHarvestVisible, setGenerationStatus, setErrorMessage, triggerOrbPulse, setHasGrown, setLastGeneratedInput]);
+  }, [projectId, addFlower, addConnection, setFlowers, setConnections, addReasoningLog,
+    clearReasoningLogs, setHarvestResults, setHarvestVisible, setGenerationStatus,
+    setErrorMessage, triggerOrbPulse, setHasGrown, setLastGeneratedInput]);
 
   const handleStartGrowth = useCallback(() => runGeneration(false, 'auto'), [runGeneration]);
   const handleRegenerate = useCallback(() => runGeneration(true, 'param_change'), [runGeneration]);
@@ -214,7 +238,8 @@ export default function App() {
     setRetryPopup(null);
     useStore.getState().setProblemDescription('');
     setShowResetConfirm(false);
-  }, [projectId, setFlowers, setConnections, clearReasoningLogs, setHarvestResults, setHarvestVisible, setGenerationStatus, setErrorMessage, setHasGrown, setLastGeneratedInput]);
+  }, [projectId, setFlowers, setConnections, clearReasoningLogs, setHarvestResults,
+    setHarvestVisible, setGenerationStatus, setErrorMessage, setHasGrown, setLastGeneratedInput]);
 
   const handleDeletePetal = useCallback(async (flowerId: string, petalId: string) => {
     const { flowers: cf } = useStore.getState();
@@ -227,7 +252,12 @@ export default function App() {
     await logInteractionEvent({ projectId, eventType: 'delete_petal', payload: { flowerId, petalId } });
     const remaining = flower.petals.filter(p => p.id !== petalId);
     if (remaining.length === 0) { handleDeleteFlower(flowerId); return; }
-    useStore.getState().addReasoningLog({ id: `reason-regen-${Date.now()}`, project_id: projectId, step_number: useStore.getState().reasoningLogs.length + 1, text_content: `Regenerating after removal from ${flower.entity_name}…`, highlighted_phrases: [flower.entity_name], created_at: new Date().toISOString() });
+    useStore.getState().addReasoningLog({
+      id: `reason-regen-${Date.now()}`, project_id: projectId,
+      step_number: useStore.getState().reasoningLogs.length + 1,
+      text_content: `Regenerating after removal from ${flower.entity_name}…`,
+      highlighted_phrases: [flower.entity_name], created_at: new Date().toISOString(),
+    });
     setTimeout(() => runGeneration(true, 'delete_petal'), 500);
   }, [projectId, removePetal, setDeletingPetalId, runGeneration]);
 
@@ -241,30 +271,61 @@ export default function App() {
     setDeletingFlowerId(null);
     await logInteractionEvent({ projectId, eventType: 'delete_flower', payload: { flowerId } });
     const { flowers: afterDelete } = useStore.getState();
-    if (afterDelete.length === 0) { setHarvestVisible(false); setGenerationStatus('idle'); clearReasoningLogs(); return; }
-    useStore.getState().addReasoningLog({ id: `reason-del-${Date.now()}`, project_id: projectId, step_number: useStore.getState().reasoningLogs.length + 1, text_content: `Rebalancing after removal of ${flower.entity_name}…`, highlighted_phrases: [flower.entity_name], created_at: new Date().toISOString() });
+    if (afterDelete.length === 0) {
+      setHarvestVisible(false); setGenerationStatus('idle'); clearReasoningLogs(); return;
+    }
+    useStore.getState().addReasoningLog({
+      id: `reason-del-${Date.now()}`, project_id: projectId,
+      step_number: useStore.getState().reasoningLogs.length + 1,
+      text_content: `Rebalancing after removal of ${flower.entity_name}…`,
+      highlighted_phrases: [flower.entity_name], created_at: new Date().toISOString(),
+    });
     setRebalancing(true);
     await new Promise(r => setTimeout(r, 1500));
     setRebalancing(false);
     setTimeout(() => runGeneration(true, 'delete_flower'), 200);
-  }, [projectId, removeFlower, setDeletingFlowerId, setRebalancing, runGeneration, setHarvestVisible, setGenerationStatus, clearReasoningLogs]);
+  }, [projectId, removeFlower, setDeletingFlowerId, setRebalancing, runGeneration,
+    setHarvestVisible, setGenerationStatus, clearReasoningLogs]);
 
   const handleReplantInsight = useCallback(async (result: HarvestResult) => {
-    useStore.getState().addReasoningLog({ id: `reason-replant-${Date.now()}`, project_id: projectId, step_number: useStore.getState().reasoningLogs.length + 1, text_content: `Replanting insight: "${result.title}"…`, highlighted_phrases: [result.title], created_at: new Date().toISOString() });
+    useStore.getState().addReasoningLog({
+      id: `reason-replant-${Date.now()}`, project_id: projectId,
+      step_number: useStore.getState().reasoningLogs.length + 1,
+      text_content: `Replanting insight: "${result.title}"…`,
+      highlighted_phrases: [result.title], created_at: new Date().toISOString(),
+    });
     await logInteractionEvent({ projectId, eventType: 'replant_insight', payload: { harvestId: result.id, title: result.title } });
     await runGeneration(true, 'replant');
   }, [projectId, runGeneration]);
 
-  const handleManualConnect = useCallback(async (sourceType: 'orb' | 'flower', sourceId: string, targetType: 'orb' | 'flower', targetId: string) => {
+  const handleManualConnect = useCallback(async (
+    sourceType: 'orb' | 'flower', sourceId: string,
+    targetType: 'orb' | 'flower', targetId: string
+  ) => {
     const { connections: cc, addConnection: ac } = useStore.getState();
     const actualTargetId = targetType === 'orb' ? sourceId : targetId;
     const actualSourceId = targetType === 'orb' ? targetId : sourceId;
-    const actualSourceType: 'orb' | 'flower' = targetType === 'orb' ? (sourceType === 'orb' ? 'orb' : 'flower') : sourceType;
+    const actualSourceType: 'orb' | 'flower' = targetType === 'orb'
+      ? (sourceType === 'orb' ? 'orb' : 'flower') : sourceType;
     if (actualTargetId === actualSourceId) return;
-    if (cc.some(c => (c.source_id === actualSourceId && c.target_id === actualTargetId) || (c.source_id === actualTargetId && c.target_id === actualSourceId))) return;
-    ac({ id: `conn-manual-${Date.now()}`, project_id: projectId, source_type: actualSourceType, source_id: actualSourceType === 'orb' ? 'orb' : actualSourceId, target_type: 'flower', target_id: actualTargetId, relationship_description: 'Manual connection', created_at: new Date().toISOString() });
+    if (cc.some(c =>
+      (c.source_id === actualSourceId && c.target_id === actualTargetId) ||
+      (c.source_id === actualTargetId && c.target_id === actualSourceId)
+    )) return;
+    ac({
+      id: `conn-manual-${Date.now()}`, project_id: projectId,
+      source_type: actualSourceType,
+      source_id: actualSourceType === 'orb' ? 'orb' : actualSourceId,
+      target_type: 'flower', target_id: actualTargetId,
+      relationship_description: 'Manual connection', created_at: new Date().toISOString(),
+    });
     await logInteractionEvent({ projectId, eventType: 'manual_connect', payload: { sourceType: actualSourceType, sourceId: actualSourceId, targetId: actualTargetId } });
-    useStore.getState().addReasoningLog({ id: `reason-manual-${Date.now()}`, project_id: projectId, step_number: useStore.getState().reasoningLogs.length + 1, text_content: `Manual connection created. Regenerating…`, highlighted_phrases: ['manual connection'], created_at: new Date().toISOString() });
+    useStore.getState().addReasoningLog({
+      id: `reason-manual-${Date.now()}`, project_id: projectId,
+      step_number: useStore.getState().reasoningLogs.length + 1,
+      text_content: `Manual connection created. Regenerating…`,
+      highlighted_phrases: ['manual connection'], created_at: new Date().toISOString(),
+    });
     setTimeout(() => runGeneration(true, 'manual_connect'), 400);
   }, [projectId, runGeneration]);
 
@@ -278,81 +339,97 @@ export default function App() {
   const statusTextColor = isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.5)';
 
   return (
-    <div className="flex flex-col w-full h-full" style={{ background: isDark ? '#080d18' : '#eef2ff', transition: 'background 0.3s ease' }}>
-      <Header />
+    <>
+      {/* Task 4: Landing page — shown first */}
+      {showLanding && <LandingPage onEnter={() => setShowLanding(false)} />}
 
-      {retryPopup && <RetryPopup error={retryPopup} onRetry={retryPopup.retryFn} onDismiss={() => setRetryPopup(null)} />}
+      <div
+        className="flex flex-col w-full h-full"
+        style={{
+          background: isDark ? '#080d18' : '#eef2ff',
+          transition: 'background 0.3s ease',
+          opacity: showLanding ? 0 : 1,
+          pointerEvents: showLanding ? 'none' : 'auto',
+          transitionProperty: 'opacity, background',
+          transitionDuration: '0.7s',
+        }}
+      >
+        <Header />
 
-      {showResetConfirm && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)' }} onClick={() => setShowResetConfirm(false)}>
-          <div style={{ background: isDark ? 'rgba(9,13,24,0.99)' : 'rgba(255,255,255,0.99)', border: '1px solid rgba(255,60,60,0.4)', borderRadius: 16, padding: '28px 32px', maxWidth: 380, width: '90%' }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ color: isDark ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.85)', fontSize: 16, fontWeight: 700, margin: '0 0 8px' }}>Reset Everything?</h3>
-            <p style={{ color: isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.5)', fontSize: 12, lineHeight: 1.6, margin: '0 0 24px' }}>Permanently deletes all flowers, connections, reasoning, harvest results, and AI context.</p>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={handleFullReset} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid rgba(255,60,60,0.5)', background: 'rgba(255,60,60,0.18)', color: '#ff5050', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Yes, Reset All</button>
-              <button onClick={() => setShowResetConfirm(false)} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)'}`, background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)', color: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+        {retryPopup && (
+          <RetryPopup
+            error={retryPopup}
+            onRetry={retryPopup.retryFn}
+            onDismiss={() => setRetryPopup(null)}
+          />
+        )}
+
+        {showResetConfirm && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)' }} onClick={() => setShowResetConfirm(false)}>
+            <div style={{ background: isDark ? 'rgba(9,13,24,0.99)' : 'rgba(255,255,255,0.99)', border: '1px solid rgba(255,60,60,0.4)', borderRadius: 16, padding: '28px 32px', maxWidth: 380, width: '90%' }} onClick={e => e.stopPropagation()}>
+              <h3 style={{ color: isDark ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.85)', fontSize: 16, fontWeight: 700, margin: '0 0 8px' }}>Reset Everything?</h3>
+              <p style={{ color: isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.5)', fontSize: 12, lineHeight: 1.6, margin: '0 0 24px' }}>Permanently deletes all flowers, connections, reasoning, harvest results, and AI context.</p>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={handleFullReset} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid rgba(255,60,60,0.5)', background: 'rgba(255,60,60,0.18)', color: '#ff5050', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Yes, Reset All</button>
+                <button onClick={() => setShowResetConfirm(false)} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)'}`, background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)', color: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      <div className="flex flex-1 overflow-hidden" style={{ marginTop: 56 }}>
-        <LeftPanel />
-        <div className="flex-1 flex flex-col overflow-hidden relative">
-          {/* Action bar */}
-          <div style={{ display: 'flex', alignItems: 'center', padding: '0 20px', height: 52, flexShrink: 0, background: actionBarBg, borderBottom: `1px solid ${actionBarBorder}`, backdropFilter: 'blur(12px)', zIndex: 10, gap: 10, transition: 'background 0.3s ease' }}>
-            {/* Left status */}
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 6, height: 6, borderRadius: '50%', background: statusDotColor, boxShadow: flowers.length > 0 ? '0 0 6px #39ff14' : 'none', flexShrink: 0 }} />
-                <span style={{ fontSize: 11, color: statusTextColor, whiteSpace: 'nowrap' }}>
-                  {flowers.length > 0 ? `${flowers.length} flowers · ${flowers.reduce((a, f) => a + f.petals.length, 0)} petals` : 'Garden empty'}
+        <div className="flex flex-1 overflow-hidden" style={{ marginTop: 56 }}>
+          <LeftPanel />
+          <div className="flex-1 flex flex-col overflow-hidden relative">
+            {/* Action bar */}
+            <div style={{ display: 'flex', alignItems: 'center', padding: '0 20px', height: 52, flexShrink: 0, background: actionBarBg, borderBottom: `1px solid ${actionBarBorder}`, backdropFilter: 'blur(12px)', zIndex: 10, gap: 10, transition: 'background 0.3s ease' }}>
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: statusDotColor, boxShadow: flowers.length > 0 ? '0 0 6px #39ff14' : 'none', flexShrink: 0 }} />
+                  <span style={{ fontSize: 11, color: statusTextColor, whiteSpace: 'nowrap' }}>
+                    {flowers.length > 0 ? `${flowers.length} flowers · ${flowers.reduce((a, f) => a + f.petals.length, 0)} petals` : 'Garden empty'}
+                  </span>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                <StartGrowthButton
+                  onStart={hasGrown ? handleRegenerate : handleStartGrowth}
+                  isRegenerate={hasGrown}
+                  canRegenerate={!hasGrown || inputChanged}
+                />
+                {hasGrown && (
+                  <button
+                    onClick={() => setShowResetConfirm(true)}
+                    disabled={isLoading}
+                    style={{ display: 'flex', alignItems: 'center', gap: 5, height: 38, padding: '0 14px', borderRadius: 10, border: '1.5px solid rgba(255,60,60,0.45)', background: isLoading ? 'rgba(255,60,60,0.06)' : 'rgba(255,60,60,0.12)', color: isLoading ? 'rgba(255,80,80,0.4)' : '#ff5050', fontSize: 12, fontWeight: 700, cursor: isLoading ? 'not-allowed' : 'pointer', opacity: isLoading ? 0.5 : 1, transition: 'all 0.2s', whiteSpace: 'nowrap', flexShrink: 0 }}
+                    onMouseEnter={e => { if (!isLoading) (e.currentTarget as HTMLElement).style.background = 'rgba(255,60,60,0.22)'; }}
+                    onMouseLeave={e => { if (!isLoading) (e.currentTarget as HTMLElement).style.background = 'rgba(255,60,60,0.12)'; }}
+                  >
+                    🗑 Reset
+                  </button>
+                )}
+              </div>
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                <span style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
+                  {isLoading && <span style={{ color: 'rgba(0,220,255,0.6)' }}>⟳ Processing...</span>}
+                  {generationStatus === 'success' && flowers.length > 0 && <span style={{ color: 'rgba(57,255,20,0.6)' }}>✓ Growth complete</span>}
                 </span>
               </div>
             </div>
 
-            {/* Center buttons */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-              <StartGrowthButton
-                onStart={hasGrown ? handleRegenerate : handleStartGrowth}
-                isRegenerate={hasGrown}
-                canRegenerate={!hasGrown || inputChanged}
+            <div ref={canvasWrapperRef} className="flex-1 relative overflow-hidden">
+              <Canvas
+                onDeletePetal={handleDeletePetal}
+                onDeleteFlower={handleDeleteFlower}
+                onManualConnect={handleManualConnect}
+                pulseBright={pulseBright}
+                harvestPanelHeightPx={harvestPanelHeightPx}
               />
-              {hasGrown && (
-                <button
-                  onClick={() => setShowResetConfirm(true)}
-                  disabled={isLoading}
-                  style={{ display: 'flex', alignItems: 'center', gap: 5, height: 38, padding: '0 14px', borderRadius: 10, border: '1.5px solid rgba(255,60,60,0.45)', background: isLoading ? 'rgba(255,60,60,0.06)' : 'rgba(255,60,60,0.12)', color: isLoading ? 'rgba(255,80,80,0.4)' : '#ff5050', fontSize: 12, fontWeight: 700, cursor: isLoading ? 'not-allowed' : 'pointer', opacity: isLoading ? 0.5 : 1, transition: 'all 0.2s', whiteSpace: 'nowrap', flexShrink: 0 }}
-                  onMouseEnter={e => { if (!isLoading) (e.currentTarget as HTMLElement).style.background = 'rgba(255,60,60,0.22)'; }}
-                  onMouseLeave={e => { if (!isLoading) (e.currentTarget as HTMLElement).style.background = 'rgba(255,60,60,0.12)'; }}
-                >
-                  🗑 Reset
-                </button>
-              )}
-            </div>
-
-            {/* Right status */}
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-              <span style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
-                {isLoading && <span style={{ color: 'rgba(0,220,255,0.6)' }}>⟳ Processing...</span>}
-                {generationStatus === 'success' && flowers.length > 0 && <span style={{ color: 'rgba(57,255,20,0.6)' }}>✓ Growth complete</span>}
-              </span>
+              <HarvestPanel onReplant={handleReplantInsight} />
             </div>
           </div>
-
-          <div ref={canvasWrapperRef} className="flex-1 relative overflow-hidden">
-            <Canvas
-              onDeletePetal={handleDeletePetal}
-              onDeleteFlower={handleDeleteFlower}
-              onManualConnect={handleManualConnect}
-              pulseBright={pulseBright}
-              harvestPanelHeightPx={harvestPanelHeightPx}
-            />
-            <HarvestPanel onReplant={handleReplantInsight} />
-          </div>
+          <RightPanel onRegenerate={handleRegenerate} />
         </div>
-        <RightPanel onRegenerate={handleRegenerate} />
       </div>
-    </div>
+    </>
   );
 }
