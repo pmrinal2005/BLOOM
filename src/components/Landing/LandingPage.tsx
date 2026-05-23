@@ -1,665 +1,1517 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+// src/components/Landing/LandingPage.tsx
+import { useEffect, useRef, useState, useCallback } from 'react';
 
 interface Props {
   onEnter: () => void;
 }
 
-interface BloomFlower {
-  id: number;
-  x: number;
-  y: number;
-  size: number;
-  color: string;
-  petalCount: number;
-  rotation: number;
-  depth: number;
-  duration: number;
-  delay: number;
-  blur: number;
-  opacity: number;
-  reverse: boolean;
+/* ─────────────────────────────────────────────
+   TYPES
+───────────────────────────────────────────── */
+interface Particle {
+  x: number; y: number; vx: number; vy: number;
+  life: number; maxLife: number; size: number;
+  color: string; opacity: number;
 }
 
-function FlowerSVG({
-  color,
-  petalCount,
-  openness,
-  rotation,
-}: {
-  color: string;
-  petalCount: number;
-  openness: number;
-  rotation: number;
-}) {
-  const coreR = 4;
-  const petalLen = 10 + openness * 7;
-  const petalW = 4 + openness * 1.5;
-  const glow = 4 + openness * 10;
+/* ─────────────────────────────────────────────
+   CONSTANTS
+───────────────────────────────────────────── */
+const ACCENT_CYAN    = '#22d3ee';
+const ACCENT_PURPLE  = '#a855f7';
+const ACCENT_PINK    = '#ec4899';
+const ACCENT_INDIGO  = '#6366f1';
+const ACCENT_TEAL    = '#14b8a6';
+const ACCENT_GREEN   = '#10b981';
 
-  return (
-    <svg viewBox="-28 -28 56 56" width="100%" height="100%" overflow="visible">
-      <g
-        transform={`rotate(${rotation})`}
-        style={{ filter: `drop-shadow(0 0 ${glow}px ${color})` }}
-      >
-        {Array.from({ length: petalCount }).map((_, i) => {
-          const a = (i / petalCount) * Math.PI * 2 - Math.PI / 2;
-          const dist = coreR + petalLen * 0.52;
-          const px = Math.cos(a) * dist;
-          const py = Math.sin(a) * dist;
-
-          return (
-            <ellipse
-              key={i}
-              cx={px}
-              cy={py}
-              rx={petalW}
-              ry={petalLen * 0.48}
-              fill={color}
-              opacity={0.72 + openness * 0.28}
-              transform={`rotate(${(a * 180) / Math.PI + 90},${px},${py})`}
-            />
-          );
-        })}
-        <circle cx={0} cy={0} r={coreR} fill="#fbbf24" opacity={0.92} />
-        <circle cx={0} cy={0} r={coreR * 0.45} fill="#f59e0b" />
-      </g>
-    </svg>
-  );
-}
-
-function buildArchPath(
-  ctx: CanvasRenderingContext2D,
-  cx: number,
-  cy: number,
-  outerR: number,
-  innerR: number
-) {
-  ctx.beginPath();
-  ctx.arc(cx, cy, outerR, Math.PI, 0, false);
-  ctx.arc(cx, cy, innerR, 0, Math.PI, true);
-  ctx.closePath();
-}
-
-function setCanvasSize(
-  canvas: HTMLCanvasElement,
-  ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-  dpr: number
-) {
-  canvas.width = Math.floor(width * dpr);
-  canvas.height = Math.floor(height * dpr);
-  canvas.style.width = `${width}px`;
-  canvas.style.height = `${height}px`;
-
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-}
-
-const FLOWER_COLORS = [
-  '#fb7185', '#f472b6', '#e879f9', '#c084fc', '#818cf8',
-  '#38bdf8', '#22d3ee', '#2dd4bf', '#34d399', '#fbbf24',
-  '#f59e0b', '#f87171',
+const FEATURES = [
+  {
+    icon: '✦',
+    title: 'AI-Powered Insights',
+    desc: 'Harness machine learning to surface patterns, predict outcomes, and deliver actionable recommendations in real time.',
+    color: ACCENT_CYAN,
+    grad: 'linear-gradient(135deg, rgba(34,211,238,0.12), rgba(99,102,241,0.06))',
+    border: 'rgba(34,211,238,0.25)',
+  },
+  {
+    icon: '◈',
+    title: 'Visual Analytics',
+    desc: 'Beautiful, interactive charts that transform raw data into compelling stories your entire team can understand.',
+    color: ACCENT_PURPLE,
+    grad: 'linear-gradient(135deg, rgba(168,85,247,0.12), rgba(236,72,153,0.06))',
+    border: 'rgba(168,85,247,0.25)',
+  },
+  {
+    icon: '⬡',
+    title: 'Real-Time Collaboration',
+    desc: 'Work alongside your team simultaneously with live cursors, instant sync, and conflict-free editing.',
+    color: ACCENT_PINK,
+    grad: 'linear-gradient(135deg, rgba(236,72,153,0.12), rgba(168,85,247,0.06))',
+    border: 'rgba(236,72,153,0.25)',
+  },
+  {
+    icon: '◉',
+    title: 'Smart Automation',
+    desc: 'Build powerful workflows that eliminate repetitive tasks and free your team to focus on what matters most.',
+    color: ACCENT_TEAL,
+    grad: 'linear-gradient(135deg, rgba(20,184,166,0.12), rgba(34,211,238,0.06))',
+    border: 'rgba(20,184,166,0.25)',
+  },
+  {
+    icon: '⟡',
+    title: 'Enterprise Security',
+    desc: 'Bank-grade encryption, SSO, audit logs, and compliance tools built directly into every layer of the platform.',
+    color: ACCENT_INDIGO,
+    grad: 'linear-gradient(135deg, rgba(99,102,241,0.12), rgba(168,85,247,0.06))',
+    border: 'rgba(99,102,241,0.25)',
+  },
+  {
+    icon: '✿',
+    title: 'Seamless Integrations',
+    desc: 'Connect with 200+ tools in one click. Slack, Notion, GitHub, Salesforce and more — all in your workflow.',
+    color: ACCENT_GREEN,
+    grad: 'linear-gradient(135deg, rgba(16,185,129,0.12), rgba(20,184,166,0.06))',
+    border: 'rgba(16,185,129,0.25)',
+  },
 ];
 
-function makeFlowers(
-  archCX: number,
-  archCY: number,
-  archRadius: number,
-  archThickness: number
-): BloomFlower[] {
-  const outerR = archRadius + archThickness / 2;
-  const count = 60;
+const STATS = [
+  { value: '98%',   label: 'Customer satisfaction',  color: ACCENT_CYAN },
+  { value: '3.2×',  label: 'Avg. productivity gain', color: ACCENT_PURPLE },
+  { value: '200+',  label: 'Integrations available', color: ACCENT_PINK },
+  { value: '<50ms', label: 'Global response time',   color: ACCENT_TEAL },
+];
 
-  return Array.from({ length: count }, (_, id) => {
-    const u = Math.random();
-    const angle = Math.PI - u * Math.PI;
-    const depth = Math.random();
+const TESTIMONIALS = [
+  {
+    quote: "Bloom transformed how our entire organisation approaches data. The insights are extraordinary — it's like having an analyst who never sleeps.",
+    name: 'Sofia Reyes',
+    role: 'Head of Product, Nexus AI',
+    avatar: 'SR',
+    color: ACCENT_CYAN,
+  },
+  {
+    quote: "We cut our reporting time by 70% in the first month. The automation features alone are worth ten times the price.",
+    name: 'Marcus Chen',
+    role: 'CTO, Velocity Labs',
+    avatar: 'MC',
+    color: ACCENT_PURPLE,
+  },
+  {
+    quote: "The collaboration tools are best-in-class. Our distributed team finally feels like we're in the same room.",
+    name: 'Aria Patel',
+    role: 'VP Engineering, Stratos',
+    avatar: 'AP',
+    color: ACCENT_PINK,
+  },
+];
 
-    const rimR = outerR + archThickness * (0.1 + Math.pow(Math.random(), 0.8) * 1.0);
-    const x = archCX - Math.cos(angle) * rimR + (Math.random() - 0.5) * archThickness * 0.3;
-    const y = archCY - Math.sin(angle) * rimR + (Math.random() - 0.5) * archThickness * 0.25;
+const PRICING = [
+  {
+    name: 'Starter',
+    price: '$29',
+    period: '/mo',
+    desc: 'Perfect for small teams getting started.',
+    features: ['Up to 5 users', '10 projects', 'Core analytics', 'Email support', '5GB storage'],
+    color: ACCENT_CYAN,
+    grad: 'linear-gradient(135deg, rgba(34,211,238,0.08), rgba(99,102,241,0.04))',
+    border: 'rgba(34,211,238,0.2)',
+    cta: 'Start free trial',
+    popular: false,
+  },
+  {
+    name: 'Pro',
+    price: '$79',
+    period: '/mo',
+    desc: 'For growing teams who need more power.',
+    features: ['Up to 25 users', 'Unlimited projects', 'AI insights', 'Priority support', '100GB storage', 'Custom dashboards'],
+    color: ACCENT_PURPLE,
+    grad: 'linear-gradient(135deg, rgba(168,85,247,0.15), rgba(236,72,153,0.08))',
+    border: 'rgba(168,85,247,0.4)',
+    cta: 'Start free trial',
+    popular: true,
+  },
+  {
+    name: 'Enterprise',
+    price: 'Custom',
+    period: '',
+    desc: 'Tailored solutions for large organisations.',
+    features: ['Unlimited users', 'Dedicated infra', 'Advanced security', 'SLA guarantee', 'Unlimited storage', 'Custom integrations'],
+    color: ACCENT_TEAL,
+    grad: 'linear-gradient(135deg, rgba(20,184,166,0.08), rgba(34,211,238,0.04))',
+    border: 'rgba(20,184,166,0.2)',
+    cta: 'Contact sales',
+    popular: false,
+  },
+];
 
-    const duration = 5 + Math.random() * 4;
-    const delay = -(Math.random() * duration);
-
-    return {
-      id,
-      x,
-      y,
-      size: 16 + depth * 24 + Math.random() * 10,
-      color: FLOWER_COLORS[Math.floor(Math.random() * FLOWER_COLORS.length)],
-      petalCount: 4 + Math.floor(Math.random() * 5),
-      rotation: Math.random() * 360,
-      depth,
-      duration,
-      delay,
-      blur: depth < 0.25 ? 1.0 : depth < 0.5 ? 0.6 : 0,
-      opacity: 0.4 + depth * 0.6,
-      reverse: Math.random() > 0.5,
-    };
-  });
+/* ─────────────────────────────────────────────
+   HOOK: useInView (intersection observer)
+───────────────────────────────────────────── */
+function useInView(threshold = 0.15) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [inView, setInView] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) setInView(true); },
+      { threshold }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [threshold]);
+  return { ref, inView };
 }
 
-export default function LandingPage({ onEnter }: Props) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animFrameRef = useRef<number>(0);
-  const timeRef = useRef(0);
+/* ─────────────────────────────────────────────
+   SUB-COMPONENTS
+───────────────────────────────────────────── */
 
-  const [btnHovered, setBtnHovered] = useState(false);
-  const [entered, setEntered] = useState(false);
-
-  const [winSize, setWinSize] = useState({
-    w: typeof window !== 'undefined' ? window.innerWidth : 1440,
-    h: typeof window !== 'undefined' ? window.innerHeight : 900,
-  });
-
-  useEffect(() => {
-    const onResize = () =>
-      setWinSize({ w: window.innerWidth, h: window.innerHeight });
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
-
-  // Thickness set to 0.28
-  const archCX = winSize.w / 2;
-  const archRadius = Math.min(winSize.w * 0.36, winSize.h * 0.65);
-  const archCY = winSize.h * 0.98;
-  const archThickness = archRadius * 0.28; // Changed to 0.28
-
-  const flowers = useMemo(
-    () => makeFlowers(archCX, archCY, archRadius, archThickness),
-    [archCX, archCY, archRadius, archThickness]
+// Animated gradient orb background
+function OrbBackground() {
+  return (
+    <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
+      {/* Primary orb — top left */}
+      <div style={{
+        position: 'absolute', top: '-20%', left: '-10%',
+        width: '55vw', height: '55vw',
+        background: 'radial-gradient(circle, rgba(99,102,241,0.18) 0%, rgba(168,85,247,0.08) 50%, transparent 70%)',
+        borderRadius: '50%',
+        animation: 'orbFloat1 12s ease-in-out infinite',
+        filter: 'blur(1px)',
+      }} />
+      {/* Secondary orb — bottom right */}
+      <div style={{
+        position: 'absolute', bottom: '-15%', right: '-8%',
+        width: '50vw', height: '50vw',
+        background: 'radial-gradient(circle, rgba(34,211,238,0.15) 0%, rgba(20,184,166,0.06) 50%, transparent 70%)',
+        borderRadius: '50%',
+        animation: 'orbFloat2 15s ease-in-out infinite',
+        filter: 'blur(1px)',
+      }} />
+      {/* Accent orb — center */}
+      <div style={{
+        position: 'absolute', top: '30%', left: '40%',
+        width: '30vw', height: '30vw',
+        background: 'radial-gradient(circle, rgba(236,72,153,0.10) 0%, transparent 70%)',
+        borderRadius: '50%',
+        animation: 'orbFloat3 18s ease-in-out infinite',
+      }} />
+      {/* Subtle grid */}
+      <div style={{
+        position: 'absolute', inset: 0,
+        backgroundImage: `
+          linear-gradient(rgba(99,102,241,0.04) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(99,102,241,0.04) 1px, transparent 1px)
+        `,
+        backgroundSize: '60px 60px',
+      }} />
+    </div>
   );
+}
 
-  const backFlowers = useMemo(() => flowers.filter((f) => f.depth < 0.5), [flowers]);
-  const frontFlowers = useMemo(() => flowers.filter((f) => f.depth >= 0.5), [flowers]);
+// Floating particle canvas for hero
+function ParticleCanvas() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const frameRef  = useRef<number>(0);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const mainCtx = canvas.getContext('2d');
-    if (!mainCtx) return;
-
-    const flowCanvas = document.createElement('canvas');
-    const maskCanvas = document.createElement('canvas');
-    const ringCanvas = document.createElement('canvas');
-
-    const flowCtx = flowCanvas.getContext('2d');
-    const maskCtx = maskCanvas.getContext('2d');
-    const ringCtx = ringCanvas.getContext('2d');
-
-    if (!flowCtx || !maskCtx || !ringCtx) return;
-
-    let width = window.innerWidth;
-    let height = window.innerHeight;
-    let dpr = Math.min(window.devicePixelRatio || 1, 2);
-
-    const rebuildMask = () => {
-      // Thickness 0.28 applied
-      const cx = width / 2;
-      const cy = height * 0.98;
-      const radius = Math.min(width * 0.36, height * 0.65);
-      const outerR = radius + radius * 0.28 / 2; // Changed to 0.28
-      const innerR = radius - radius * 0.28 / 2; // Changed to 0.28
-
-      maskCtx.clearRect(0, 0, width, height);
-
-      maskCtx.save();
-      buildArchPath(maskCtx, cx, cy, outerR + 50, innerR - 25);
-      maskCtx.filter = `blur(${Math.max(35, radius * 0.14)}px)`;
-      maskCtx.fillStyle = 'rgba(255,255,255,0.5)';
-      maskCtx.fill();
-      maskCtx.restore();
-
-      maskCtx.save();
-      buildArchPath(maskCtx, cx, cy, outerR, innerR);
-      maskCtx.fillStyle = 'rgba(255,255,255,1)';
-      maskCtx.fill();
-      maskCtx.restore();
-    };
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
     const resize = () => {
-      width = window.innerWidth;
-      height = window.innerHeight;
-      dpr = Math.min(window.devicePixelRatio || 1, 2);
-
-      setCanvasSize(canvas, mainCtx, width, height, dpr);
-      setCanvasSize(flowCanvas, flowCtx, width, height, dpr);
-      setCanvasSize(maskCanvas, maskCtx, width, height, dpr);
-      setCanvasSize(ringCanvas, ringCtx, width, height, dpr);
-
-      rebuildMask();
+      canvas.width  = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
     };
-
     resize();
-    window.addEventListener('resize', resize);
 
-    const drawMarbleRibbon = (
-      t: number,
-      offset: number,
-      amp: number,
-      widthMul: number,
-      alpha: number,
-      blur: number,
-      speed: number,
-      phase: number,
-      stops: [number, string][],
-      composite: GlobalCompositeOperation = 'screen'
-    ) => {
-      // Thickness 0.28 applied
-      const cx = width / 2;
-      const cy = height * 0.98;
-      const radius = Math.min(width * 0.36, height * 0.65);
-      const outerR = radius + radius * 0.28 / 2; // Changed to 0.28
-      const centerR = radius;
-      const thickness = radius * 0.28; // Changed to 0.28
-      const steps = 80;
+    const colors = [ACCENT_CYAN, ACCENT_PURPLE, ACCENT_PINK, ACCENT_INDIGO, ACCENT_TEAL];
+    const particles: Particle[] = [];
 
-      const grad = flowCtx.createLinearGradient(cx - outerR, cy - 40, cx + outerR, cy + 40);
-      stops.forEach(([p, c]) => grad.addColorStop(p, c));
-
-      flowCtx.save();
-      flowCtx.globalCompositeOperation = composite;
-      flowCtx.lineCap = 'round';
-      flowCtx.lineJoin = 'round';
-      flowCtx.filter = `blur(${blur}px)`;
-      flowCtx.globalAlpha = alpha;
-
-      flowCtx.beginPath();
-      for (let i = 0; i <= steps; i++) {
-        const u = i / steps;
-        const a = Math.PI - u * Math.PI;
-        
-        const edgeBoost = 0.6 + 0.8 * Math.abs(Math.cos(u * Math.PI));
-        const wave =
-          Math.sin(u * 4 * Math.PI + phase + t * speed) * amp +
-          Math.sin(u * 11 * Math.PI - phase * 1.3 - t * speed * 0.7) * (amp * 0.5) +
-          Math.sin(u * 23 * Math.PI + phase * 0.6) * (amp * 0.2);
-
-        const r = centerR + offset + wave * edgeBoost;
-        const x = cx - Math.cos(a) * r;
-        const y = cy - Math.sin(a) * r;
-
-        if (i === 0) flowCtx.moveTo(x, y);
-        else flowCtx.lineTo(x, y);
-      }
-
-      flowCtx.lineWidth = thickness * widthMul;
-      flowCtx.strokeStyle = grad;
-      flowCtx.stroke();
-
-      flowCtx.globalAlpha = alpha * 0.6;
-      flowCtx.filter = `blur(${Math.max(2, blur * 0.5)}px)`;
-      flowCtx.lineWidth = thickness * widthMul * 0.35;
-      flowCtx.strokeStyle = 'rgba(255,255,255,0.7)';
-      flowCtx.stroke();
-      
-      flowCtx.restore();
-    };
-
-    const drawMarbleSwirl = (
-      t: number,
-      uPos: number,
-      offset: number,
-      sizeMul: number,
-      turns: number,
-      alpha: number,
-      blur: number,
-      speed: number,
-      phase: number,
-      stops: [number, string][]
-    ) => {
-      // Thickness 0.28 applied
-      const cx = width / 2;
-      const cy = height * 0.98;
-      const radius = Math.min(width * 0.36, height * 0.65);
-      const thickness = radius * 0.28; // Changed to 0.28
-
-      const u = uPos + Math.sin(t * speed + phase) * 0.015;
-      const a = Math.PI - u * Math.PI;
-      const localR = radius + offset + Math.sin(t * speed * 0.7 + phase) * thickness * 0.02;
-      const px = cx - Math.cos(a) * localR;
-      const py = cy - Math.sin(a) * localR;
-
-      const size = thickness * sizeMul;
-      const grad = flowCtx.createLinearGradient(-size, 0, size, 0);
-      stops.forEach(([p, c]) => grad.addColorStop(p, c));
-
-      flowCtx.save();
-      flowCtx.translate(px, py);
-      flowCtx.rotate(a - Math.PI / 2);
-      flowCtx.globalCompositeOperation = 'overlay';
-      flowCtx.globalAlpha = alpha;
-      flowCtx.filter = `blur(${blur}px)`;
-      flowCtx.lineCap = 'round';
-
-      const steps = 36;
-      flowCtx.beginPath();
-      for (let i = 0; i <= steps; i++) {
-        const p = i / steps;
-        const theta = p * Math.PI * 2 * turns + t * speed * 0.4;
-        const rr = size * (1 - p) * (1 - 0.08 * Math.sin(p * 5 + t * 0.5));
-        const x = Math.cos(theta) * rr;
-        const y = Math.sin(theta) * rr * 0.65;
-
-        if (i === 0) flowCtx.moveTo(x, y);
-        else flowCtx.lineTo(x, y);
-      }
-
-      flowCtx.lineWidth = size * 0.14;
-      flowCtx.strokeStyle = grad;
-      flowCtx.stroke();
-      flowCtx.restore();
-    };
-
-    const drawArch = (t: number) => {
-      // Thickness 0.28 applied
-      const cx = width / 2;
-      const cy = height * 0.98;
-      const radius = Math.min(width * 0.36, height * 0.65);
-      const outerR = radius + radius * 0.28 / 2; // Changed to 0.28
-      const innerR = radius - radius * 0.28 / 2; // Changed to 0.28
-      const thickness = radius * 0.28; // Changed to 0.28
-
-      const pad = 180;
-      const rectX = cx - outerR - pad;
-      const rectY = cy - outerR - pad;
-      const rectS = (outerR + pad) * 2;
-
-      flowCtx.clearRect(0, 0, width, height);
-
-      flowCtx.save();
-      buildArchPath(flowCtx, cx, cy, outerR, innerR);
-      flowCtx.clip();
-
-      const baseGrad = flowCtx.createLinearGradient(cx - outerR, cy - 60, cx + outerR, cy + 60);
-      baseGrad.addColorStop(0.0, '#06b6d4');
-      baseGrad.addColorStop(0.25, '#10b981');
-      baseGrad.addColorStop(0.5, '#9333ea');
-      baseGrad.addColorStop(0.65, '#ec4899');
-      baseGrad.addColorStop(0.85, '#f59e0b');
-      baseGrad.addColorStop(1.0, '#f97316');
-
-      flowCtx.globalAlpha = 1;
-      flowCtx.fillStyle = baseGrad;
-      flowCtx.fillRect(rectX, rectY, rectS, rectS);
-
-      // Marble Layers
-      drawMarbleRibbon(t, -thickness * 0.08, thickness * 0.18, 0.4, 0.5, 8, 0.3, 0, [
-        [0, 'rgba(34, 211, 238, 0.9)'],
-        [0.5, 'rgba(52, 211, 153, 0.8)'],
-        [1, 'rgba(52, 211, 153, 0)'],
-      ]);
-
-      drawMarbleRibbon(t, thickness * 0.02, thickness * 0.14, 0.45, 0.45, 10, 0.25, 2, [
-        [0, 'rgba(168, 85, 247, 0)'],
-        [0.3, 'rgba(192, 132, 252, 0.9)'],
-        [0.7, 'rgba(236, 72, 153, 0.85)'],
-        [1, 'rgba(244, 114, 182, 0)'],
-      ]);
-
-      drawMarbleRibbon(t, thickness * 0.12, thickness * 0.16, 0.38, 0.48, 9, 0.28, 4, [
-        [0, 'rgba(251, 191, 36, 0)'],
-        [0.4, 'rgba(245, 158, 11, 0.9)'],
-        [0.8, 'rgba(251, 146, 60, 0.85)'],
-        [1, 'rgba(255, 122, 60, 0)'],
-      ]);
-
-      drawMarbleRibbon(t, -thickness * 0.02, thickness * 0.1, 0.3, 0.3, 6, 0.2, 1.5, [
-        [0, 'rgba(10, 10, 30, 0)'],
-        [0.5, 'rgba(20, 20, 60, 0.5)'],
-        [1, 'rgba(10, 10, 30, 0)'],
-      ], 'multiply');
-
-      // Swirls
-      drawMarbleSwirl(t, 0.12, -thickness * 0.12, 0.55, 2.8, 0.4, 2.5, 0.35, 0, [
-        [0, 'rgba(34, 211, 238, 0)'],
-        [0.4, 'rgba(34, 211, 238, 0.9)'],
-        [1, 'rgba(52, 211, 153, 0)'],
-      ]);
-
-      drawMarbleSwirl(t, 0.52, -thickness * 0.04, 0.5, 2.4, 0.35, 2, 0.3, 2.5, [
-        [0, 'rgba(168, 85, 247, 0)'],
-        [0.5, 'rgba(236, 72, 153, 0.85)'],
-        [1, 'rgba(236, 72, 153, 0)'],
-      ]);
-
-      drawMarbleSwirl(t, 0.88, -thickness * 0.08, 0.6, 3, 0.42, 2.8, 0.32, 5, [
-        [0, 'rgba(251, 191, 36, 0)'],
-        [0.5, 'rgba(245, 158, 11, 0.9)'],
-        [1, 'rgba(255, 237, 100, 0)'],
-      ]);
-
-      flowCtx.restore();
-
-      rebuildMask();
-
-      ringCtx.clearRect(0, 0, width, height);
-      ringCtx.save();
-      ringCtx.drawImage(flowCanvas, 0, 0, width, height);
-      ringCtx.globalCompositeOperation = 'destination-in';
-      ringCtx.drawImage(maskCanvas, 0, 0, width, height);
-      ringCtx.restore();
-
-      mainCtx.clearRect(0, 0, width, height);
-
-      mainCtx.save();
-      mainCtx.globalCompositeOperation = 'screen';
-      mainCtx.globalAlpha = 0.7;
-      mainCtx.filter = 'blur(40px)';
-      mainCtx.drawImage(ringCanvas, 0, 0, width, height);
-      mainCtx.restore();
-
-      mainCtx.save();
-      mainCtx.globalCompositeOperation = 'screen';
-      mainCtx.globalAlpha = 0.85;
-      mainCtx.filter = 'blur(14px)';
-      mainCtx.drawImage(ringCanvas, 0, 0, width, height);
-      mainCtx.restore();
-
-      mainCtx.save();
-      mainCtx.globalAlpha = 1;
-      mainCtx.filter = 'blur(0.8px)';
-      mainCtx.drawImage(ringCanvas, 0, 0, width, height);
-      mainCtx.restore();
-
-      // Localized blooms
-      const blooms = [
-        { u: 0.1, color: 'rgba(6, 182, 212, 0.5)', r: 120 },
-        { u: 0.3, color: 'rgba(16, 185, 129, 0.45)', r: 100 },
-        { u: 0.5, color: 'rgba(147, 51, 234, 0.55)', r: 140 },
-        { u: 0.7, color: 'rgba(236, 72, 153, 0.5)', r: 120 },
-        { u: 0.9, color: 'rgba(245, 158, 11, 0.5)', r: 110 },
-      ];
-
-      mainCtx.save();
-      mainCtx.globalCompositeOperation = 'screen';
-      blooms.forEach((b) => {
-        const a = Math.PI - b.u * Math.PI;
-        const rPos = outerR + 25;
-        const x = cx - Math.cos(a) * rPos;
-        const y = cy - Math.sin(a) * rPos - 50;
-        
-        const g = mainCtx.createRadialGradient(x, y, 0, x, y, b.r);
-        g.addColorStop(0, b.color);
-        g.addColorStop(1, 'rgba(0,0,0,0)');
-        
-        mainCtx.fillStyle = g;
-        mainCtx.globalAlpha = 0.8;
-        mainCtx.fillRect(x - b.r, y - b.r, b.r * 2, b.r * 2);
+    const spawn = () => {
+      particles.push({
+        x: Math.random() * canvas.width,
+        y: canvas.height + 10,
+        vx: (Math.random() - 0.5) * 0.4,
+        vy: -(Math.random() * 0.6 + 0.2),
+        life: 0,
+        maxLife: 180 + Math.random() * 120,
+        size: 1 + Math.random() * 2.5,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        opacity: 0,
       });
-      mainCtx.restore();
     };
+
+    for (let i = 0; i < 40; i++) {
+      spawn();
+      particles[i].y = Math.random() * canvas.height;
+      particles[i].life = Math.random() * particles[i].maxLife;
+    }
 
     const loop = () => {
-      timeRef.current += 0.008;
-      drawArch(timeRef.current);
-      animFrameRef.current = requestAnimationFrame(loop);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (Math.random() < 0.35) spawn();
+
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx; p.y += p.vy; p.life++;
+        const alpha = Math.sin((p.life / p.maxLife) * Math.PI) * 0.7;
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle   = p.color;
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur  = 8;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+        if (p.life >= p.maxLife) particles.splice(i, 1);
+      }
+      ctx.globalAlpha = 1;
+      ctx.shadowBlur  = 0;
+      frameRef.current = requestAnimationFrame(loop);
     };
 
-    animFrameRef.current = requestAnimationFrame(loop);
-
+    frameRef.current = requestAnimationFrame(loop);
+    window.addEventListener('resize', resize);
     return () => {
-      cancelAnimationFrame(animFrameRef.current);
+      cancelAnimationFrame(frameRef.current);
       window.removeEventListener('resize', resize);
     };
-  }, [archCX, archCY, archRadius, archThickness]);
+  }, []);
 
-  const handleEnter = () => {
-    setEntered(true);
-    setTimeout(onEnter, 650);
-  };
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
+    />
+  );
+}
 
-  const innerR = archRadius - archThickness / 2;
-  const textCenterY = archCY - innerR * 0.4;
-
-  const renderFlower = (flower: BloomFlower) => (
+// Glass card component
+function GlassCard({ children, style = {}, hover = true }: {
+  children: React.ReactNode; style?: React.CSSProperties; hover?: boolean;
+}) {
+  const [hovered, setHovered] = useState(false);
+  return (
     <div
-      key={flower.id}
+      onMouseEnter={() => hover && setHovered(true)}
+      onMouseLeave={() => hover && setHovered(false)}
       style={{
-        position: 'absolute',
-        left: flower.x,
-        top: flower.y,
-        width: flower.size,
-        height: flower.size,
-        transform: 'translate(-50%, -50%)',
-        opacity: flower.opacity,
-        filter: flower.blur ? `blur(${flower.blur}px)` : 'none',
-        pointerEvents: 'none',
-        zIndex: flower.depth >= 0.5 ? 10 : 0,
+        background: hovered
+          ? 'rgba(255,255,255,0.06)'
+          : 'rgba(255,255,255,0.03)',
+        border: `1px solid ${hovered ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.07)'}`,
+        borderRadius: 20,
+        backdropFilter: 'blur(16px)',
+        transition: 'all 0.35s cubic-bezier(0.4,0,0.2,1)',
+        transform: hovered ? 'translateY(-4px)' : 'translateY(0)',
+        boxShadow: hovered
+          ? '0 20px 60px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.06)'
+          : '0 4px 20px rgba(0,0,0,0.25)',
+        ...style,
       }}
     >
-      <div
-        style={{
-          width: '100%',
-          height: '100%',
-          animation: `flowerDrift ${flower.duration}s ease-in-out ${flower.delay}s infinite`,
-          animationDirection: flower.reverse ? 'reverse' : 'normal',
-          transformOrigin: '50% 50%',
-          willChange: 'transform',
-        }}
-      >
-        <FlowerSVG
-          color={flower.color}
-          petalCount={flower.petalCount}
-          rotation={flower.rotation}
-          openness={0.95}
-        />
+      {children}
+    </div>
+  );
+}
+
+// Animated counter
+function AnimatedCounter({ target, suffix = '' }: { target: string; suffix?: string }) {
+  const [display, setDisplay] = useState('0');
+  const { ref, inView } = useInView(0.3);
+
+  useEffect(() => {
+    if (!inView) return;
+    const num = parseFloat(target.replace(/[^0-9.]/g, ''));
+    if (isNaN(num)) { setDisplay(target); return; }
+    const prefix = target.match(/^[^0-9]*/)?.[0] ?? '';
+    const suf    = target.match(/[^0-9.]+$/)?.[0] ?? suffix;
+    let start = 0;
+    const duration = 1800;
+    const step = 16;
+    const steps = duration / step;
+    const inc = num / steps;
+    const timer = setInterval(() => {
+      start += inc;
+      if (start >= num) { setDisplay(`${prefix}${target.replace(/^[^0-9]*/, '')}${suf !== suffix ? '' : suffix}`); clearInterval(timer); return; }
+      const decimals = num % 1 !== 0 ? 1 : 0;
+      setDisplay(`${prefix}${start.toFixed(decimals)}${suf !== suffix ? suf : suffix}`);
+    }, step);
+    return () => clearInterval(timer);
+  }, [inView, target, suffix]);
+
+  return <span ref={ref as React.RefObject<HTMLSpanElement>}>{inView ? display : '0'}</span>;
+}
+
+// Section reveal wrapper
+function Reveal({ children, delay = 0, style = {} }: {
+  children: React.ReactNode; delay?: number; style?: React.CSSProperties;
+}) {
+  const { ref, inView } = useInView(0.1);
+  return (
+    <div
+      ref={ref}
+      style={{
+        opacity: inView ? 1 : 0,
+        transform: inView ? 'translateY(0px)' : 'translateY(36px)',
+        transition: `opacity 0.7s ease ${delay}ms, transform 0.7s cubic-bezier(0.4,0,0.2,1) ${delay}ms`,
+        ...style,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+// Nav bar
+function NavBar({ onEnter }: { onEnter: () => void }) {
+  const [scrolled, setScrolled] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener('scroll', onScroll);
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  const scrollTo = (id: string) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+    setMobileOpen(false);
+  };
+
+  return (
+    <nav style={{
+      position: 'fixed', top: 0, left: 0, right: 0, zIndex: 1000,
+      padding: '0 24px',
+      background: scrolled ? 'rgba(8,11,22,0.85)' : 'transparent',
+      backdropFilter: scrolled ? 'blur(20px)' : 'none',
+      borderBottom: scrolled ? '1px solid rgba(255,255,255,0.06)' : '1px solid transparent',
+      transition: 'all 0.4s ease',
+    }}>
+      <div style={{
+        maxWidth: 1200, margin: '0 auto',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        height: 68,
+      }}>
+        {/* Logo */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+          <div style={{
+            width: 34, height: 34, borderRadius: 10,
+            background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 18, fontWeight: 900, color: '#fff',
+            boxShadow: '0 0 20px rgba(168,85,247,0.4)',
+          }}>B</div>
+          <span style={{
+            fontSize: 20, fontWeight: 800, letterSpacing: '-0.03em',
+            background: 'linear-gradient(90deg, #e2e8f0, #94a3b8)',
+            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+          }}>Bloom</span>
+        </div>
+
+        {/* Desktop nav links */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 36 }}
+          className="nav-links-desktop">
+          {[['Features', 'features'], ['Stats', 'stats'], ['Testimonials', 'testimonials'], ['Pricing', 'pricing']].map(([label, id]) => (
+            <button key={id} onClick={() => scrollTo(id)} style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: '#94a3b8', fontSize: 14, fontWeight: 500,
+              fontFamily: 'Inter, system-ui, sans-serif',
+              transition: 'color 0.2s',
+              padding: '4px 0',
+            }}
+              onMouseEnter={e => (e.currentTarget.style.color = '#e2e8f0')}
+              onMouseLeave={e => (e.currentTarget.style.color = '#94a3b8')}
+            >{label}</button>
+          ))}
+        </div>
+
+        {/* CTA buttons */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button onClick={onEnter} style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: '#94a3b8', fontSize: 14, fontWeight: 500,
+            fontFamily: 'Inter, system-ui, sans-serif',
+            padding: '8px 16px', borderRadius: 8,
+            transition: 'color 0.2s',
+          }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#e2e8f0')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#94a3b8')}
+          >Sign in</button>
+          <button onClick={onEnter} style={{
+            background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+            border: 'none', cursor: 'pointer',
+            color: '#fff', fontSize: 14, fontWeight: 600,
+            fontFamily: 'Inter, system-ui, sans-serif',
+            padding: '9px 20px', borderRadius: 10,
+            boxShadow: '0 0 20px rgba(99,102,241,0.35)',
+            transition: 'all 0.25s ease',
+          }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.04)'; e.currentTarget.style.boxShadow = '0 0 30px rgba(99,102,241,0.5)'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = '0 0 20px rgba(99,102,241,0.35)'; }}
+          >Get started</button>
+        </div>
+      </div>
+    </nav>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   SECTION COMPONENTS
+───────────────────────────────────────────── */
+
+// ── HERO ──
+function HeroSection({ onEnter }: { onEnter: () => void }) {
+  const [btnHovered, setBtnHovered] = useState(false);
+  const [btn2Hovered, setBtn2Hovered] = useState(false);
+
+  // Typewriter effect for sub-headline
+  const words = ['productivity', 'creativity', 'collaboration', 'innovation'];
+  const [wordIdx, setWordIdx] = useState(0);
+  const [displayed, setDisplayed] = useState('');
+  const [typing, setTyping] = useState(true);
+
+  useEffect(() => {
+    const word = words[wordIdx];
+    if (typing) {
+      if (displayed.length < word.length) {
+        const t = setTimeout(() => setDisplayed(word.slice(0, displayed.length + 1)), 80);
+        return () => clearTimeout(t);
+      } else {
+        const t = setTimeout(() => setTyping(false), 1800);
+        return () => clearTimeout(t);
+      }
+    } else {
+      if (displayed.length > 0) {
+        const t = setTimeout(() => setDisplayed(displayed.slice(0, -1)), 45);
+        return () => clearTimeout(t);
+      } else {
+        setWordIdx(i => (i + 1) % words.length);
+        setTyping(true);
+      }
+    }
+  }, [displayed, typing, wordIdx]);
+
+  return (
+    <section style={{
+      position: 'relative', minHeight: '100vh',
+      display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      padding: '120px 24px 80px',
+      overflow: 'hidden',
+    }}>
+      <OrbBackground />
+      <ParticleCanvas />
+
+      <div style={{ position: 'relative', zIndex: 1, maxWidth: 860, margin: '0 auto', textAlign: 'center' }}>
+        {/* Badge */}
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: 8,
+          background: 'rgba(99,102,241,0.12)',
+          border: '1px solid rgba(99,102,241,0.3)',
+          borderRadius: 999, padding: '6px 16px',
+          marginBottom: 32,
+          animation: 'fadeSlideDown 0.8s ease both',
+        }}>
+          <span style={{
+            width: 6, height: 6, borderRadius: '50%',
+            background: ACCENT_CYAN,
+            boxShadow: `0 0 8px ${ACCENT_CYAN}`,
+            display: 'inline-block',
+            animation: 'pulse 2s ease infinite',
+          }} />
+          <span style={{ color: ACCENT_CYAN, fontSize: 13, fontWeight: 600, letterSpacing: '0.04em' }}>
+            Now in public beta — join 10,000+ teams
+          </span>
+        </div>
+
+        {/* Main headline */}
+        <h1 style={{
+          fontSize: 'clamp(48px, 8vw, 96px)',
+          fontWeight: 900,
+          letterSpacing: '-0.04em',
+          lineHeight: 1.0,
+          fontFamily: 'Inter, system-ui, sans-serif',
+          color: '#f1f5f9',
+          margin: '0 0 8px',
+          animation: 'fadeSlideDown 0.8s ease 0.1s both',
+        }}>
+          Grow beyond
+        </h1>
+        <h1 style={{
+          fontSize: 'clamp(48px, 8vw, 96px)',
+          fontWeight: 900,
+          letterSpacing: '-0.04em',
+          lineHeight: 1.0,
+          fontFamily: 'Inter, system-ui, sans-serif',
+          background: 'linear-gradient(135deg, #22d3ee 0%, #6366f1 40%, #a855f7 75%, #ec4899 100%)',
+          WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+          margin: '0 0 28px',
+          animation: 'fadeSlideDown 0.8s ease 0.2s both',
+        }}>
+          every limit.
+        </h1>
+
+        {/* Typewriter tagline */}
+        <p style={{
+          fontSize: 'clamp(18px, 2.5vw, 24px)',
+          color: '#64748b',
+          fontWeight: 400,
+          lineHeight: 1.6,
+          maxWidth: 640,
+          margin: '0 auto 48px',
+          animation: 'fadeSlideDown 0.8s ease 0.3s both',
+          fontFamily: 'Inter, system-ui, sans-serif',
+        }}>
+          The all-in-one platform that amplifies your team's&nbsp;
+          <span style={{
+            color: ACCENT_CYAN,
+            fontWeight: 600,
+            borderRight: '2px solid ' + ACCENT_CYAN,
+            paddingRight: 2,
+            animation: 'blink 1s step-end infinite',
+          }}>
+            {displayed}
+          </span>
+        </p>
+
+        {/* CTA buttons */}
+        <div style={{
+          display: 'flex', flexWrap: 'wrap', gap: 16,
+          justifyContent: 'center', alignItems: 'center',
+          animation: 'fadeSlideDown 0.8s ease 0.4s both',
+        }}>
+          <button
+            onClick={onEnter}
+            onMouseEnter={() => setBtnHovered(true)}
+            onMouseLeave={() => setBtnHovered(false)}
+            style={{
+              padding: '15px 36px',
+              borderRadius: 12,
+              border: 'none',
+              background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+              color: '#fff',
+              fontSize: 16, fontWeight: 700,
+              fontFamily: 'Inter, system-ui, sans-serif',
+              cursor: 'pointer',
+              boxShadow: btnHovered
+                ? '0 0 40px rgba(99,102,241,0.6), 0 8px 30px rgba(0,0,0,0.3)'
+                : '0 0 25px rgba(99,102,241,0.35), 0 4px 15px rgba(0,0,0,0.2)',
+              transform: btnHovered ? 'translateY(-2px) scale(1.03)' : 'translateY(0) scale(1)',
+              transition: 'all 0.3s cubic-bezier(0.4,0,0.2,1)',
+              letterSpacing: '-0.01em',
+            }}>
+            Start for free →
+          </button>
+          <button
+            onClick={onEnter}
+            onMouseEnter={() => setBtn2Hovered(true)}
+            onMouseLeave={() => setBtn2Hovered(false)}
+            style={{
+              padding: '15px 36px',
+              borderRadius: 12,
+              border: `1px solid ${btn2Hovered ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.1)'}`,
+              background: btn2Hovered ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.03)',
+              color: '#e2e8f0',
+              fontSize: 16, fontWeight: 600,
+              fontFamily: 'Inter, system-ui, sans-serif',
+              cursor: 'pointer',
+              backdropFilter: 'blur(12px)',
+              transform: btn2Hovered ? 'translateY(-2px)' : 'translateY(0)',
+              transition: 'all 0.3s cubic-bezier(0.4,0,0.2,1)',
+              letterSpacing: '-0.01em',
+            }}>
+            View demo
+          </button>
+        </div>
+
+        {/* Social proof row */}
+        <div style={{
+          marginTop: 64,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          gap: 20, flexWrap: 'wrap',
+          animation: 'fadeSlideDown 0.8s ease 0.5s both',
+        }}>
+          {/* Avatars */}
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            {['#6366f1', '#a855f7', '#ec4899', '#22d3ee', '#14b8a6'].map((c, i) => (
+              <div key={i} style={{
+                width: 36, height: 36, borderRadius: '50%',
+                background: `linear-gradient(135deg, ${c}, ${c}99)`,
+                border: '2px solid #080b16',
+                marginLeft: i > 0 ? -10 : 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 11, fontWeight: 700, color: '#fff',
+              }}>
+                {['S', 'M', 'A', 'J', 'K'][i]}
+              </div>
+            ))}
+          </div>
+          <div style={{ textAlign: 'left' }}>
+            <div style={{ display: 'flex', gap: 2 }}>
+              {[...Array(5)].map((_, i) => (
+                <span key={i} style={{ color: '#fbbf24', fontSize: 14 }}>★</span>
+              ))}
+            </div>
+            <p style={{ color: '#64748b', fontSize: 13, margin: 0, fontFamily: 'Inter, system-ui, sans-serif' }}>
+              <span style={{ color: '#94a3b8', fontWeight: 600 }}>4.9/5</span> from 2,400+ reviews
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Hero dashboard mockup */}
+      <div style={{
+        position: 'relative', zIndex: 1,
+        marginTop: 80, width: '100%', maxWidth: 1000,
+        animation: 'fadeSlideUp 1s ease 0.6s both',
+      }}>
+        <DashboardMockup />
+      </div>
+    </section>
+  );
+}
+
+// Mini dashboard mockup for hero
+function DashboardMockup() {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick(p => p + 1), 2000);
+    return () => clearInterval(t);
+  }, []);
+
+  const bars = [65, 82, 54, 90, 73, 88, 62, 95, 78, 85, 70, 92];
+  const animated = bars.map((b, i) => b * (0.6 + 0.4 * Math.sin((tick * 0.8 + i * 0.4))));
+
+  return (
+    <div style={{
+      background: 'rgba(15,20,40,0.8)',
+      border: '1px solid rgba(255,255,255,0.08)',
+      borderRadius: 20,
+      overflow: 'hidden',
+      boxShadow: '0 40px 120px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05), 0 0 80px rgba(99,102,241,0.08)',
+      backdropFilter: 'blur(20px)',
+    }}>
+      {/* Window chrome */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '14px 20px',
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        background: 'rgba(255,255,255,0.02)',
+      }}>
+        {['#ff5f57', '#febc2e', '#28c840'].map((c, i) => (
+          <div key={i} style={{ width: 12, height: 12, borderRadius: '50%', background: c }} />
+        ))}
+        <div style={{
+          flex: 1, textAlign: 'center',
+          color: '#475569', fontSize: 12,
+          background: 'rgba(255,255,255,0.04)',
+          borderRadius: 6, padding: '3px 0', maxWidth: 240, margin: '0 auto',
+        }}>
+          app.bloom.io/dashboard
+        </div>
+      </div>
+
+      {/* Dashboard content */}
+      <div style={{ padding: '20px', display: 'flex', gap: 16 }}>
+        {/* Sidebar */}
+        <div style={{
+          width: 44,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, paddingTop: 4,
+        }}>
+          {[ACCENT_INDIGO, ACCENT_CYAN, ACCENT_PURPLE, ACCENT_TEAL].map((c, i) => (
+            <div key={i} style={{
+              width: 32, height: 32, borderRadius: 10,
+              background: i === 0
+                ? `linear-gradient(135deg, ${c}, #a855f7)`
+                : 'rgba(255,255,255,0.04)',
+              border: i === 0 ? 'none' : '1px solid rgba(255,255,255,0.06)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <div style={{ width: 14, height: 14, borderRadius: 4, background: i === 0 ? 'rgba(255,255,255,0.6)' : c, opacity: 0.7 }} />
+            </div>
+          ))}
+        </div>
+
+        {/* Main area */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* Top stat cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
+            {[
+              { label: 'Revenue', val: '$84.2k', change: '+12%', color: ACCENT_CYAN },
+              { label: 'Users',   val: '24.8k',  change: '+8%',  color: ACCENT_PURPLE },
+              { label: 'Projects',val: '142',    change: '+5%',  color: ACCENT_PINK },
+              { label: 'Tasks',   val: '1,204',  change: '+19%', color: ACCENT_TEAL },
+            ].map((stat, i) => (
+              <div key={i} style={{
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.06)',
+                borderRadius: 10, padding: '10px 12px',
+              }}>
+                <div style={{ color: '#475569', fontSize: 10, marginBottom: 4, fontFamily: 'Inter, system-ui, sans-serif' }}>{stat.label}</div>
+                <div style={{ color: '#e2e8f0', fontSize: 16, fontWeight: 700, fontFamily: 'Inter, system-ui, sans-serif', letterSpacing: '-0.02em' }}>{stat.val}</div>
+                <div style={{ color: stat.color, fontSize: 10, fontWeight: 600, fontFamily: 'Inter, system-ui, sans-serif' }}>{stat.change}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Chart area */}
+          <div style={{
+            background: 'rgba(255,255,255,0.02)',
+            border: '1px solid rgba(255,255,255,0.05)',
+            borderRadius: 12, padding: '14px',
+          }}>
+            <div style={{ color: '#475569', fontSize: 11, marginBottom: 12, fontFamily: 'Inter, system-ui, sans-serif' }}>
+              Analytics Overview
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 5, height: 70 }}>
+              {animated.map((h, i) => (
+                <div key={i} style={{
+                  flex: 1,
+                  height: `${h * 0.7}%`,
+                  background: `linear-gradient(to top, ${ACCENT_INDIGO}aa, ${ACCENT_CYAN}66)`,
+                  borderRadius: '3px 3px 0 0',
+                  transition: 'height 1.5s cubic-bezier(0.4,0,0.2,1)',
+                  minHeight: 4,
+                }} />
+              ))}
+            </div>
+          </div>
+
+          {/* Bottom row */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            {/* Activity feed */}
+            <div style={{
+              background: 'rgba(255,255,255,0.02)',
+              border: '1px solid rgba(255,255,255,0.05)',
+              borderRadius: 10, padding: '10px 12px',
+            }}>
+              <div style={{ color: '#475569', fontSize: 10, marginBottom: 8, fontFamily: 'Inter, system-ui, sans-serif' }}>Recent Activity</div>
+              {[
+                { label: 'Report generated', color: ACCENT_CYAN },
+                { label: 'User milestone hit', color: ACCENT_PURPLE },
+                { label: 'Integration synced', color: ACCENT_TEAL },
+              ].map((item, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <div style={{ width: 5, height: 5, borderRadius: '50%', background: item.color, flexShrink: 0 }} />
+                  <div style={{ color: '#64748b', fontSize: 10, fontFamily: 'Inter, system-ui, sans-serif' }}>{item.label}</div>
+                </div>
+              ))}
+            </div>
+            {/* Donut placeholder */}
+            <div style={{
+              background: 'rgba(255,255,255,0.02)',
+              border: '1px solid rgba(255,255,255,0.05)',
+              borderRadius: 10, padding: '10px 12px',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8,
+            }}>
+              <div style={{ color: '#475569', fontSize: 10, fontFamily: 'Inter, system-ui, sans-serif' }}>Distribution</div>
+              <svg width="52" height="52" viewBox="0 0 52 52">
+                {[
+                  { color: ACCENT_INDIGO, pct: 40 },
+                  { color: ACCENT_CYAN,   pct: 30 },
+                  { color: ACCENT_PURPLE, pct: 20 },
+                  { color: ACCENT_PINK,   pct: 10 },
+                ].reduce<{ els: React.ReactNode[]; offset: number }>((acc, seg) => {
+                  const r = 20, circ = 2 * Math.PI * r;
+                  const dash = (seg.pct / 100) * circ;
+                  const el = (
+                    <circle key={seg.color} cx="26" cy="26" r={r}
+                      fill="none" stroke={seg.color} strokeWidth="8"
+                      strokeDasharray={`${dash} ${circ}`}
+                      strokeDashoffset={-acc.offset}
+                      style={{ transform: 'rotate(-90deg)', transformOrigin: '26px 26px' }}
+                    />
+                  );
+                  return { els: [...acc.els, el], offset: acc.offset + dash };
+                }, { els: [], offset: 0 }).els}
+              </svg>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
+}
 
+// ── FEATURES ──
+function FeaturesSection() {
+  const { ref, inView } = useInView(0.05);
+  return (
+    <section id="features" style={{ padding: '120px 24px', position: 'relative' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+        <Reveal>
+          <div style={{ textAlign: 'center', marginBottom: 72 }}>
+            <div style={{
+              display: 'inline-block',
+              background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.25)',
+              borderRadius: 999, padding: '5px 14px', marginBottom: 20,
+              color: ACCENT_PURPLE, fontSize: 12, fontWeight: 600, letterSpacing: '0.06em',
+              textTransform: 'uppercase', fontFamily: 'Inter, system-ui, sans-serif',
+            }}>
+              Capabilities
+            </div>
+            <h2 style={{
+              fontSize: 'clamp(32px, 5vw, 56px)', fontWeight: 800,
+              letterSpacing: '-0.03em', color: '#f1f5f9',
+              fontFamily: 'Inter, system-ui, sans-serif', margin: '0 0 16px',
+            }}>
+              Everything your team needs
+            </h2>
+            <p style={{
+              color: '#64748b', fontSize: 18, maxWidth: 520, margin: '0 auto',
+              fontFamily: 'Inter, system-ui, sans-serif', lineHeight: 1.6,
+            }}>
+              A complete toolkit built for modern teams who refuse to settle for ordinary.
+            </p>
+          </div>
+        </Reveal>
+
+        <div ref={ref} style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+          gap: 20,
+        }}>
+          {FEATURES.map((f, i) => (
+            <Reveal key={f.title} delay={i * 80}>
+              <FeatureCard feature={f} />
+            </Reveal>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function FeatureCard({ feature: f }: { feature: typeof FEATURES[0] }) {
+  const [hovered, setHovered] = useState(false);
   return (
     <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 9999,
-        background: 'radial-gradient(ellipse at 50% 100%, #0f172a 0%, #020617 50%, #000000 100%)',
-        overflow: 'hidden',
-        opacity: entered ? 0 : 1,
-        transition: 'opacity 0.65s ease',
-        pointerEvents: entered ? 'none' : 'auto',
+        background: hovered ? f.grad : 'rgba(255,255,255,0.02)',
+        border: `1px solid ${hovered ? f.border : 'rgba(255,255,255,0.06)'}`,
+        borderRadius: 20, padding: '28px 28px 32px',
+        transition: 'all 0.35s cubic-bezier(0.4,0,0.2,1)',
+        transform: hovered ? 'translateY(-6px)' : 'translateY(0)',
+        boxShadow: hovered ? `0 20px 60px rgba(0,0,0,0.35), 0 0 30px ${f.color}14` : '0 4px 20px rgba(0,0,0,0.2)',
+        cursor: 'default',
+      }}>
+      <div style={{
+        width: 48, height: 48, borderRadius: 14,
+        background: `${f.color}18`, border: `1px solid ${f.color}35`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 22, color: f.color, marginBottom: 20,
+        transition: 'all 0.3s ease',
+        boxShadow: hovered ? `0 0 20px ${f.color}30` : 'none',
+      }}>
+        {f.icon}
+      </div>
+      <h3 style={{
+        fontSize: 18, fontWeight: 700, color: '#e2e8f0',
+        fontFamily: 'Inter, system-ui, sans-serif',
+        letterSpacing: '-0.02em', marginBottom: 10,
+      }}>
+        {f.title}
+      </h3>
+      <p style={{
+        fontSize: 15, color: '#64748b', lineHeight: 1.65,
+        fontFamily: 'Inter, system-ui, sans-serif',
+      }}>
+        {f.desc}
+      </p>
+    </div>
+  );
+}
+
+// ── STATS ──
+function StatsSection() {
+  return (
+    <section id="stats" style={{
+      padding: '100px 24px', position: 'relative',
+      background: 'rgba(99,102,241,0.03)',
+      borderTop: '1px solid rgba(255,255,255,0.05)',
+      borderBottom: '1px solid rgba(255,255,255,0.05)',
+    }}>
+      <div style={{ maxWidth: 1000, margin: '0 auto' }}>
+        <Reveal>
+          <div style={{ textAlign: 'center', marginBottom: 64 }}>
+            <h2 style={{
+              fontSize: 'clamp(28px, 4vw, 48px)', fontWeight: 800,
+              letterSpacing: '-0.03em', color: '#f1f5f9',
+              fontFamily: 'Inter, system-ui, sans-serif', margin: '0 0 12px',
+            }}>
+              Trusted by teams worldwide
+            </h2>
+            <p style={{ color: '#64748b', fontSize: 17, fontFamily: 'Inter, system-ui, sans-serif' }}>
+              The numbers speak for themselves.
+            </p>
+          </div>
+        </Reveal>
+
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: 24,
+        }}>
+          {STATS.map((s, i) => (
+            <Reveal key={s.label} delay={i * 100}>
+              <div style={{
+                textAlign: 'center', padding: '40px 24px',
+                background: 'rgba(255,255,255,0.02)',
+                border: '1px solid rgba(255,255,255,0.06)',
+                borderRadius: 20,
+                transition: 'all 0.3s ease',
+              }}>
+                <div style={{
+                  fontSize: 'clamp(40px, 5vw, 60px)',
+                  fontWeight: 900, letterSpacing: '-0.04em',
+                  fontFamily: 'Inter, system-ui, sans-serif',
+                  color: s.color,
+                  textShadow: `0 0 30px ${s.color}50`,
+                  lineHeight: 1,
+                  marginBottom: 12,
+                }}>
+                  <AnimatedCounter target={s.value} />
+                </div>
+                <p style={{
+                  color: '#64748b', fontSize: 15,
+                  fontFamily: 'Inter, system-ui, sans-serif',
+                  margin: 0,
+                }}>
+                  {s.label}
+                </p>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── TESTIMONIALS ──
+function TestimonialsSection() {
+  const [active, setActive] = useState(0);
+
+  useEffect(() => {
+    const t = setInterval(() => setActive(a => (a + 1) % TESTIMONIALS.length), 4000);
+    return () => clearInterval(t);
+  }, []);
+
+  return (
+    <section id="testimonials" style={{ padding: '120px 24px' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+        <Reveal>
+          <div style={{ textAlign: 'center', marginBottom: 64 }}>
+            <div style={{
+              display: 'inline-block',
+              background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)',
+              borderRadius: 999, padding: '5px 14px', marginBottom: 20,
+              color: ACCENT_CYAN, fontSize: 12, fontWeight: 600, letterSpacing: '0.06em',
+              textTransform: 'uppercase', fontFamily: 'Inter, system-ui, sans-serif',
+            }}>
+              Testimonials
+            </div>
+            <h2 style={{
+              fontSize: 'clamp(32px, 5vw, 52px)', fontWeight: 800,
+              letterSpacing: '-0.03em', color: '#f1f5f9',
+              fontFamily: 'Inter, system-ui, sans-serif', margin: 0,
+            }}>
+              Loved by builders everywhere
+            </h2>
+          </div>
+        </Reveal>
+
+        <Reveal delay={100}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+            gap: 20,
+          }}>
+            {TESTIMONIALS.map((t, i) => (
+              <div
+                key={t.name}
+                onClick={() => setActive(i)}
+                style={{
+                  padding: '32px',
+                  background: active === i
+                    ? `linear-gradient(135deg, ${t.color}14, ${t.color}06)`
+                    : 'rgba(255,255,255,0.02)',
+                  border: `1px solid ${active === i ? t.color + '35' : 'rgba(255,255,255,0.06)'}`,
+                  borderRadius: 20,
+                  transition: 'all 0.4s cubic-bezier(0.4,0,0.2,1)',
+                  cursor: 'pointer',
+                  transform: active === i ? 'translateY(-4px)' : 'translateY(0)',
+                  boxShadow: active === i ? `0 20px 50px rgba(0,0,0,0.3), 0 0 30px ${t.color}10` : 'none',
+                }}>
+                {/* Stars */}
+                <div style={{ display: 'flex', gap: 3, marginBottom: 20 }}>
+                  {[...Array(5)].map((_, si) => (
+                    <span key={si} style={{ color: '#fbbf24', fontSize: 14 }}>★</span>
+                  ))}
+                </div>
+                <p style={{
+                  fontSize: 16, color: '#94a3b8', lineHeight: 1.7,
+                  fontFamily: 'Inter, system-ui, sans-serif',
+                  fontStyle: 'italic', marginBottom: 24,
+                }}>
+                  "{t.quote}"
+                </p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{
+                    width: 42, height: 42, borderRadius: '50%',
+                    background: `linear-gradient(135deg, ${t.color}, ${t.color}80)`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 14, fontWeight: 700, color: '#fff',
+                    flexShrink: 0,
+                  }}>
+                    {t.avatar}
+                  </div>
+                  <div>
+                    <div style={{
+                      color: '#e2e8f0', fontSize: 14, fontWeight: 700,
+                      fontFamily: 'Inter, system-ui, sans-serif',
+                    }}>{t.name}</div>
+                    <div style={{
+                      color: '#475569', fontSize: 13,
+                      fontFamily: 'Inter, system-ui, sans-serif',
+                    }}>{t.role}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Reveal>
+
+        {/* Dots */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 36 }}>
+          {TESTIMONIALS.map((t, i) => (
+            <button key={i} onClick={() => setActive(i)} style={{
+              width: active === i ? 24 : 8, height: 8,
+              borderRadius: 999, border: 'none',
+              background: active === i ? ACCENT_CYAN : 'rgba(255,255,255,0.15)',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease',
+              padding: 0,
+            }} />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── PRICING ──
+function PricingSection({ onEnter }: { onEnter: () => void }) {
+  return (
+    <section id="pricing" style={{
+      padding: '120px 24px',
+      background: 'rgba(0,0,0,0.2)',
+      borderTop: '1px solid rgba(255,255,255,0.05)',
+    }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+        <Reveal>
+          <div style={{ textAlign: 'center', marginBottom: 72 }}>
+            <div style={{
+              display: 'inline-block',
+              background: 'rgba(20,184,166,0.08)', border: '1px solid rgba(20,184,166,0.22)',
+              borderRadius: 999, padding: '5px 14px', marginBottom: 20,
+              color: ACCENT_TEAL, fontSize: 12, fontWeight: 600, letterSpacing: '0.06em',
+              textTransform: 'uppercase', fontFamily: 'Inter, system-ui, sans-serif',
+            }}>
+              Pricing
+            </div>
+            <h2 style={{
+              fontSize: 'clamp(32px, 5vw, 52px)', fontWeight: 800,
+              letterSpacing: '-0.03em', color: '#f1f5f9',
+              fontFamily: 'Inter, system-ui, sans-serif', margin: '0 0 16px',
+            }}>
+              Simple, transparent pricing
+            </h2>
+            <p style={{
+              color: '#64748b', fontSize: 17, maxWidth: 480, margin: '0 auto',
+              fontFamily: 'Inter, system-ui, sans-serif', lineHeight: 1.6,
+            }}>
+              No hidden fees. No surprises. Cancel anytime.
+            </p>
+          </div>
+        </Reveal>
+
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+          gap: 24, alignItems: 'start',
+        }}>
+          {PRICING.map((plan, i) => (
+            <Reveal key={plan.name} delay={i * 100}>
+              <PricingCard plan={plan} onEnter={onEnter} />
+            </Reveal>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function PricingCard({ plan: p, onEnter }: { plan: typeof PRICING[0]; onEnter: () => void }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        position: 'relative',
+        padding: '36px 32px 40px',
+        background: hovered ? p.grad : 'rgba(255,255,255,0.02)',
+        border: `1px solid ${hovered || p.popular ? p.border : 'rgba(255,255,255,0.07)'}`,
+        borderRadius: 24,
+        transition: 'all 0.35s cubic-bezier(0.4,0,0.2,1)',
+        transform: p.popular
+          ? (hovered ? 'scale(1.03)' : 'scale(1.01)')
+          : (hovered ? 'translateY(-6px)' : 'translateY(0)'),
+        boxShadow: hovered
+          ? `0 24px 70px rgba(0,0,0,0.4), 0 0 40px ${p.color}15`
+          : p.popular
+            ? `0 0 40px ${p.color}20`
+            : '0 4px 20px rgba(0,0,0,0.2)',
+      }}>
+      {/* Popular badge */}
+      {p.popular && (
+        <div style={{
+          position: 'absolute', top: -14, left: '50%', transform: 'translateX(-50%)',
+          background: `linear-gradient(90deg, ${ACCENT_INDIGO}, ${ACCENT_PURPLE})`,
+          color: '#fff', fontSize: 11, fontWeight: 700,
+          padding: '5px 16px', borderRadius: 999,
+          fontFamily: 'Inter, system-ui, sans-serif',
+          letterSpacing: '0.05em', textTransform: 'uppercase',
+          boxShadow: `0 0 20px ${ACCENT_PURPLE}50`,
+        }}>
+          Most Popular
+        </div>
+      )}
+
+      <div style={{ marginBottom: 28 }}>
+        <p style={{
+          fontSize: 14, fontWeight: 600, color: p.color,
+          fontFamily: 'Inter, system-ui, sans-serif',
+          textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8,
+        }}>
+          {p.name}
+        </p>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 10 }}>
+          <span style={{
+            fontSize: 52, fontWeight: 900, color: '#f1f5f9',
+            fontFamily: 'Inter, system-ui, sans-serif', letterSpacing: '-0.04em',
+          }}>
+            {p.price}
+          </span>
+          {p.period && (
+            <span style={{ color: '#475569', fontSize: 16, fontFamily: 'Inter, system-ui, sans-serif' }}>
+              {p.period}
+            </span>
+          )}
+        </div>
+        <p style={{ color: '#64748b', fontSize: 14, fontFamily: 'Inter, system-ui, sans-serif' }}>
+          {p.desc}
+        </p>
+      </div>
+
+      <button onClick={onEnter} style={{
+        width: '100%', padding: '13px',
+        borderRadius: 12, marginBottom: 28,
+        border: p.popular ? 'none' : `1px solid ${p.color}50`,
+        background: p.popular
+          ? `linear-gradient(135deg, ${ACCENT_INDIGO}, ${ACCENT_PURPLE})`
+          : 'transparent',
+        color: p.popular ? '#fff' : p.color,
+        fontSize: 15, fontWeight: 700,
+        fontFamily: 'Inter, system-ui, sans-serif',
+        cursor: 'pointer',
+        transition: 'all 0.25s ease',
+        boxShadow: p.popular ? `0 0 25px ${ACCENT_PURPLE}40` : 'none',
       }}
-    >
-      <style>{`
-        @keyframes flowerDrift {
-          0%, 100% { transform: translate3d(0, 0, 0) scale(0.9) rotate(0deg); }
-          50% { transform: translate3d(0, -10px, 0) scale(1.1) rotate(10deg); }
-        }
-      `}</style>
-
-      <div style={{ position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none' }}>
-        {backFlowers.map(renderFlower)}
-      </div>
-
-      <canvas
-        ref={canvasRef}
-        style={{ position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none' }}
-      />
-
-      <div style={{ position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'none', mixBlendMode: 'screen' }}>
-        {frontFlowers.map(renderFlower)}
-      </div>
-
-      <div
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          top: `${textCenterY}px`,
-          transform: 'translateY(-50%)',
-          zIndex: 3,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          textAlign: 'center',
-          padding: '0 24px',
-          pointerEvents: 'auto',
-        }}
+        onMouseEnter={e => { e.currentTarget.style.opacity = '0.85'; }}
+        onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
       >
-        <div
-          style={{
-            fontSize: 'clamp(40px, 6.5vw, 100px)',
-            fontWeight: 900,
-            letterSpacing: '-0.04em',
-            fontFamily: 'Inter, system-ui, sans-serif',
-            background: 'linear-gradient(135deg, #22d3ee 0%, #3b82f6 25%, #a855f7 50%, #ec4899 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
-            lineHeight: 0.9,
-            marginBottom: 10,
-            filter: 'drop-shadow(0 0 25px rgba(34,211,238,0.5)) drop-shadow(0 0 50px rgba(168,85,247,0.4))',
-          }}
-        >
-          BLOOM:
-        </div>
+        {p.cta}
+      </button>
 
-        <div
-          style={{
-            fontSize: 'clamp(18px, 3vw, 44px)',
-            fontWeight: 800,
-            color: '#6ee7b7',
+      <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {p.features.map(feat => (
+          <li key={feat} style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            color: '#94a3b8', fontSize: 14,
             fontFamily: 'Inter, system-ui, sans-serif',
-            letterSpacing: '-0.02em',
-            lineHeight: 1.1,
-            marginBottom: 32,
-            textShadow: '0 0 25px rgba(110,231,183,0.6), 0 0 50px rgba(110,231,183,0.3)',
-          }}
-        >
-          grow beyond limits
-        </div>
+          }}>
+            <span style={{
+              width: 18, height: 18, borderRadius: '50%',
+              background: `${p.color}18`, border: `1px solid ${p.color}35`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0, color: p.color, fontSize: 10, fontWeight: 700,
+            }}>✓</span>
+            {feat}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
-        <button
-          onClick={handleEnter}
-          onMouseEnter={() => setBtnHovered(true)}
-          onMouseLeave={() => setBtnHovered(false)}
-          style={{
-            padding: '12px 32px',
-            borderRadius: 999,
-            border: `2px solid ${btnHovered ? '#2dd4bf' : '#0f766e'}`,
-            background: btnHovered ? 'rgba(13,148,136,0.3)' : 'rgba(2,6,23,0.7)',
-            color: '#6ee7b7',
-            fontSize: 15,
-            fontWeight: 600,
-            fontFamily: 'Inter, system-ui, sans-serif',
-            letterSpacing: '0.03em',
-            cursor: 'pointer',
-            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            backdropFilter: 'blur(18px)',
-            boxShadow: btnHovered
-              ? '0 0 30px rgba(45,212,191,0.4), inset 0 0 12px rgba(45,212,191,0.1)'
-              : '0 0 12px rgba(15,118,110,0.25)',
-            transform: btnHovered ? 'scale(1.05)' : 'scale(1)',
-          }}
-        >
-          Explore your creative potential
-        </button>
+// ── CTA BANNER ──
+function CTASection({ onEnter }: { onEnter: () => void }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <section style={{ padding: '120px 24px' }}>
+      <div style={{ maxWidth: 860, margin: '0 auto' }}>
+        <Reveal>
+          <div style={{
+            position: 'relative', overflow: 'hidden',
+            padding: '80px 48px',
+            background: 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(168,85,247,0.10), rgba(34,211,238,0.08))',
+            border: '1px solid rgba(99,102,241,0.25)',
+            borderRadius: 28,
+            textAlign: 'center',
+            boxShadow: '0 0 80px rgba(99,102,241,0.12)',
+          }}>
+            {/* Background orbs */}
+            <div style={{
+              position: 'absolute', top: '-30%', left: '-10%',
+              width: '40%', height: '200%',
+              background: 'radial-gradient(circle, rgba(99,102,241,0.2) 0%, transparent 70%)',
+              pointerEvents: 'none',
+            }} />
+            <div style={{
+              position: 'absolute', bottom: '-30%', right: '-10%',
+              width: '40%', height: '200%',
+              background: 'radial-gradient(circle, rgba(34,211,238,0.15) 0%, transparent 70%)',
+              pointerEvents: 'none',
+            }} />
+
+            <div style={{ position: 'relative', zIndex: 1 }}>
+              <h2 style={{
+                fontSize: 'clamp(32px, 5vw, 56px)', fontWeight: 900,
+                letterSpacing: '-0.04em', color: '#f1f5f9',
+                fontFamily: 'Inter, system-ui, sans-serif',
+                margin: '0 0 16px',
+              }}>
+                Ready to bloom?
+              </h2>
+              <p style={{
+                fontSize: 18, color: '#64748b', maxWidth: 460, margin: '0 auto 40px',
+                fontFamily: 'Inter, system-ui, sans-serif', lineHeight: 1.6,
+              }}>
+                Join thousands of teams already growing beyond their limits with Bloom.
+              </p>
+              <button
+                onClick={onEnter}
+                onMouseEnter={() => setHovered(true)}
+                onMouseLeave={() => setHovered(false)}
+                style={{
+                  padding: '16px 44px',
+                  borderRadius: 14, border: 'none',
+                  background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+                  color: '#fff', fontSize: 17, fontWeight: 700,
+                  fontFamily: 'Inter, system-ui, sans-serif',
+                  cursor: 'pointer',
+                  boxShadow: hovered
+                    ? '0 0 50px rgba(99,102,241,0.7), 0 8px 30px rgba(0,0,0,0.3)'
+                    : '0 0 30px rgba(99,102,241,0.4)',
+                  transform: hovered ? 'translateY(-3px) scale(1.04)' : 'translateY(0) scale(1)',
+                  transition: 'all 0.3s cubic-bezier(0.4,0,0.2,1)',
+                  letterSpacing: '-0.01em',
+                }}>
+                Get started — it's free →
+              </button>
+            </div>
+          </div>
+        </Reveal>
       </div>
+    </section>
+  );
+}
+
+// ── FOOTER ──
+function Footer({ onEnter }: { onEnter: () => void }) {
+  const cols = [
+    { title: 'Product', links: ['Features', 'Pricing', 'Changelog', 'Roadmap'] },
+    { title: 'Company', links: ['About', 'Blog', 'Careers', 'Press'] },
+    { title: 'Resources', links: ['Docs', 'API Reference', 'Community', 'Support'] },
+    { title: 'Legal', links: ['Privacy', 'Terms', 'Security', 'Cookies'] },
+  ];
+
+  return (
+    <footer style={{
+      borderTop: '1px solid rgba(255,255,255,0.06)',
+      padding: '64px 24px 40px',
+      background: 'rgba(0,0,0,0.3)',
+    }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '2fr repeat(4,1fr)',
+          gap: 40, marginBottom: 56,
+        }}>
+          {/* Brand col */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+              <div style={{
+                width: 34, height: 34, borderRadius: 10,
+                background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 18, fontWeight: 900, color: '#fff',
+              }}>B</div>
+              <span style={{
+                fontSize: 20, fontWeight: 800, letterSpacing: '-0.03em',
+                background: 'linear-gradient(90deg, #e2e8f0, #94a3b8)',
+                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+              }}>Bloom</span>
+            </div>
+            <p style={{
+              color: '#475569', fontSize: 14, lineHeight: 1.65,
+              fontFamily: 'Inter, system-ui, sans-serif', maxWidth: 240,
+            }}>
+              Empowering teams to grow beyond every limit, every day.
+            </p>
+          </div>
+
+          {/* Link columns */}
+          {cols.map(col => (
+            <div key={col.title}>
+              <p style={{
+                color: '#e2e8f0', fontSize: 13, fontWeight: 700,
+                fontFamily: 'Inter, system-ui, sans-serif',
+                textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16,
+              }}>{col.title}</p>
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {col.links.map(link => (
+                  <li key={link}>
+                    <button onClick={onEnter} style={{
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      color: '#475569', fontSize: 14,
+                      fontFamily: 'Inter, system-ui, sans-serif',
+                      padding: 0, transition: 'color 0.2s', textAlign: 'left',
+                    }}
+                      onMouseEnter={e => (e.currentTarget.style.color = '#94a3b8')}
+                      onMouseLeave={e => (e.currentTarget.style.color = '#475569')}
+                    >{link}</button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+
+        {/* Bottom bar */}
+        <div style={{
+          borderTop: '1px solid rgba(255,255,255,0.05)',
+          paddingTop: 32,
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          flexWrap: 'wrap', gap: 12,
+        }}>
+          <p style={{ color: '#334155', fontSize: 13, fontFamily: 'Inter, system-ui, sans-serif', margin: 0 }}>
+            © 2025 Bloom, Inc. All rights reserved.
+          </p>
+          <p style={{ color: '#334155', fontSize: 13, fontFamily: 'Inter, system-ui, sans-serif', margin: 0 }}>
+            Built with ♥ for creative teams
+          </p>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   GLOBAL CSS (injected once)
+───────────────────────────────────────────── */
+const GLOBAL_CSS = `
+  @keyframes fadeSlideDown {
+    from { opacity: 0; transform: translateY(-20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeSlideUp {
+    from { opacity: 0; transform: translateY(40px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes orbFloat1 {
+    0%,100% { transform: translate(0,0) scale(1); }
+    33%      { transform: translate(3%,4%) scale(1.05); }
+    66%      { transform: translate(-2%,2%) scale(0.97); }
+  }
+  @keyframes orbFloat2 {
+    0%,100% { transform: translate(0,0) scale(1); }
+    33%      { transform: translate(-3%,-3%) scale(1.04); }
+    66%      { transform: translate(2%,-1%) scale(0.98); }
+  }
+  @keyframes orbFloat3 {
+    0%,100% { transform: translate(0,0); }
+    50%      { transform: translate(-4%,3%); }
+  }
+  @keyframes pulse {
+    0%,100% { opacity:1; box-shadow: 0 0 8px #22d3ee; }
+    50%      { opacity:0.6; box-shadow: 0 0 18px #22d3ee; }
+  }
+  @keyframes blink {
+    0%,100% { border-color: transparent; }
+    50%      { border-color: #22d3ee; }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body { background: #080b16; }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: #080b16; }
+  ::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.4); border-radius: 3px; }
+`;
+
+/* ─────────────────────────────────────────────
+   MAIN EXPORT
+───────────────────────────────────────────── */
+export default function LandingPage({ onEnter }: Props) {
+  const [entered, setEntered] = useState(false);
+
+  // Inject global styles once
+  useEffect(() => {
+    const id = 'bloom-landing-styles';
+    if (!document.getElementById(id)) {
+      const style = document.createElement('style');
+      style.id = id;
+      style.textContent = GLOBAL_CSS;
+      document.head.appendChild(style);
+    }
+    return () => {
+      // keep styles — they're harmless
+    };
+  }, []);
+
+  const handleEnter = useCallback(() => {
+    setEntered(true);
+    setTimeout(onEnter, 500);
+  }, [onEnter]);
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9999,
+      overflowY: entered ? 'hidden' : 'auto',
+      overflowX: 'hidden',
+      background: '#080b16',
+      opacity: entered ? 0 : 1,
+      transition: 'opacity 0.5s ease',
+      pointerEvents: entered ? 'none' : 'auto',
+      fontFamily: 'Inter, system-ui, sans-serif',
+    }}>
+      <NavBar onEnter={handleEnter} />
+      <HeroSection onEnter={handleEnter} />
+      <FeaturesSection />
+      <StatsSection />
+      <TestimonialsSection />
+      <PricingSection onEnter={handleEnter} />
+      <CTASection onEnter={handleEnter} />
+      <Footer onEnter={handleEnter} />
     </div>
   );
 }
