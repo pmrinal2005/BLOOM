@@ -39,6 +39,30 @@ function RetryPopup({ error, onRetry, onDismiss }: {
   );
 }
 
+// Task 5: Simple 404 page
+function NotFoundPage({ onGoHome }: { onGoHome: () => void }) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: '#080d18', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 9999, fontFamily: 'Inter, sans-serif' }}>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: 80, fontWeight: 900, background: 'linear-gradient(135deg, #00dcff, #b400ff)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', lineHeight: 1, marginBottom: 16 }}>404</div>
+        <h2 style={{ color: 'rgba(255,255,255,0.8)', fontSize: 22, fontWeight: 700, marginBottom: 10 }}>Page Not Found</h2>
+        <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14, marginBottom: 32 }}>This garden path doesn't exist.</p>
+        <button onClick={onGoHome} style={{ padding: '12px 32px', borderRadius: 12, background: 'linear-gradient(135deg, rgba(0,220,255,0.22), rgba(0,160,200,0.18))', border: '1.5px solid rgba(0,220,255,0.45)' as any, color: '#00dcff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+          ← Back to Home
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Task 5: route detection
+function getRoute(): 'landing' | 'dashboard' | 'notfound' {
+  const path = window.location.pathname.replace(/\/$/, '') || '/';
+  if (path === '/' || path === '/home') return 'landing';
+  if (path === '/dashboard') return 'dashboard';
+  return 'notfound';
+}
+
 export default function App() {
   const {
     projectId, flowers, setFlowers, addFlower, setConnections, addConnection,
@@ -54,8 +78,30 @@ export default function App() {
     theme,
   } = useStore();
 
-  // Task 4: Landing page state
-  const [showLanding, setShowLanding] = useState(true);
+  // Task 5: route state
+  const [route, setRoute] = useState<'landing' | 'dashboard' | 'notfound'>(getRoute);
+
+  // Task 5: browser back button → go to landing
+  useEffect(() => {
+    const handlePopState = () => {
+      setRoute(getRoute());
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const navigateTo = useCallback((path: string) => {
+    window.history.pushState({}, '', path);
+    setRoute(getRoute());
+  }, []);
+
+  const handleEnterDashboard = useCallback(() => {
+    navigateTo('/dashboard');
+  }, [navigateTo]);
+
+  const handleGoHome = useCallback(() => {
+    navigateTo('/');
+  }, [navigateTo]);
 
   const [pulseBright, setPulseBright] = useState(false);
   const generationRef = useRef(false);
@@ -181,7 +227,33 @@ export default function App() {
         setFlowers(positioned);
       }
 
-      for (const conn of result.connections) {
+      // Task 8: ensure all flowers have orb connections first
+      // Build set of flower IDs that already have an orb connection
+      const existingOrbTargets = new Set(
+        result.connections
+          .filter(c => c.source_type === 'orb')
+          .map(c => c.target_id)
+      );
+
+      // Add missing orb→flower connections for all new flowers
+      const now = new Date().toISOString();
+      const orbConnections = result.flowers
+        .filter(f => !existingOrbTargets.has(f.id))
+        .map((f, i) => ({
+          id: `conn-orb-auto-${f.id}-${Date.now()}-${i}`,
+          project_id: projectId,
+          source_type: 'orb' as const,
+          source_id: 'orb',
+          target_type: 'flower' as const,
+          target_id: f.id,
+          relationship_description: 'Core connection to central soul',
+          created_at: now,
+        }));
+
+      // All connections: orb ones first, then the AI-generated ones
+      const allConnections = [...orbConnections, ...result.connections];
+
+      for (const conn of allConnections) {
         await new Promise(r => setTimeout(r, 100));
         addConnection(conn);
       }
@@ -332,104 +404,106 @@ export default function App() {
   const isLoading = generationStatus === 'loading';
   const inputChanged = hasNewInput();
 
-  // Theme-aware action bar
   const actionBarBg = isDark ? 'rgba(8,13,24,0.95)' : 'rgba(248,250,255,0.97)';
   const actionBarBorder = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.08)';
   const statusDotColor = flowers.length > 0 ? '#39ff14' : (isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.2)');
-  const statusTextColor = isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.5)';
+  // Task 10: ensure status text is always visible in light mode
+  const statusTextColor = isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.55)';
 
+  // Task 5: render 404 page
+  if (route === 'notfound') {
+    return <NotFoundPage onGoHome={handleGoHome} />;
+  }
+
+  // Task 5: render landing page
+  if (route === 'landing') {
+    return <LandingPage onEnter={handleEnterDashboard} />;
+  }
+
+  // Dashboard
   return (
-    <>
-      {/* Task 4: Landing page — shown first */}
-      {showLanding && <LandingPage onEnter={() => setShowLanding(false)} />}
+    <div
+      className="flex flex-col w-full h-full"
+      style={{
+        background: isDark ? '#080d18' : '#eef2ff',
+        transition: 'background 0.3s ease',
+      }}
+    >
+      <Header />
 
-      <div
-        className="flex flex-col w-full h-full"
-        style={{
-          background: isDark ? '#080d18' : '#eef2ff',
-          transition: 'background 0.3s ease',
-          opacity: showLanding ? 0 : 1,
-          pointerEvents: showLanding ? 'none' : 'auto',
-          transitionProperty: 'opacity, background',
-          transitionDuration: '0.7s',
-        }}
-      >
-        <Header />
+      {retryPopup && (
+        <RetryPopup
+          error={retryPopup}
+          onRetry={retryPopup.retryFn}
+          onDismiss={() => setRetryPopup(null)}
+        />
+      )}
 
-        {retryPopup && (
-          <RetryPopup
-            error={retryPopup}
-            onRetry={retryPopup.retryFn}
-            onDismiss={() => setRetryPopup(null)}
-          />
-        )}
-
-        {showResetConfirm && (
-          <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)' }} onClick={() => setShowResetConfirm(false)}>
-            <div style={{ background: isDark ? 'rgba(9,13,24,0.99)' : 'rgba(255,255,255,0.99)', border: '1px solid rgba(255,60,60,0.4)', borderRadius: 16, padding: '28px 32px', maxWidth: 380, width: '90%' }} onClick={e => e.stopPropagation()}>
-              <h3 style={{ color: isDark ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.85)', fontSize: 16, fontWeight: 700, margin: '0 0 8px' }}>Reset Everything?</h3>
-              <p style={{ color: isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.5)', fontSize: 12, lineHeight: 1.6, margin: '0 0 24px' }}>Permanently deletes all flowers, connections, reasoning, harvest results, and AI context.</p>
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button onClick={handleFullReset} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid rgba(255,60,60,0.5)', background: 'rgba(255,60,60,0.18)', color: '#ff5050', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Yes, Reset All</button>
-                <button onClick={() => setShowResetConfirm(false)} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)'}`, background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)', color: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
-              </div>
+      {showResetConfirm && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)' }} onClick={() => setShowResetConfirm(false)}>
+          <div style={{ background: isDark ? 'rgba(9,13,24,0.99)' : 'rgba(255,255,255,0.99)', border: '1px solid rgba(255,60,60,0.4)', borderRadius: 16, padding: '28px 32px', maxWidth: 380, width: '90%' }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ color: isDark ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.85)', fontSize: 16, fontWeight: 700, margin: '0 0 8px' }}>Reset Everything?</h3>
+            <p style={{ color: isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.5)', fontSize: 12, lineHeight: 1.6, margin: '0 0 24px' }}>Permanently deletes all flowers, connections, reasoning, harvest results, and AI context.</p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={handleFullReset} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid rgba(255,60,60,0.5)', background: 'rgba(255,60,60,0.18)', color: '#ff5050', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Yes, Reset All</button>
+              <button onClick={() => setShowResetConfirm(false)} style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)'}`, background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)', color: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        <div className="flex flex-1 overflow-hidden" style={{ marginTop: 56 }}>
-          <LeftPanel />
-          <div className="flex-1 flex flex-col overflow-hidden relative">
-            {/* Action bar */}
-            <div style={{ display: 'flex', alignItems: 'center', padding: '0 20px', height: 52, flexShrink: 0, background: actionBarBg, borderBottom: `1px solid ${actionBarBorder}`, backdropFilter: 'blur(12px)', zIndex: 10, gap: 10, transition: 'background 0.3s ease' }}>
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: statusDotColor, boxShadow: flowers.length > 0 ? '0 0 6px #39ff14' : 'none', flexShrink: 0 }} />
-                  <span style={{ fontSize: 11, color: statusTextColor, whiteSpace: 'nowrap' }}>
-                    {flowers.length > 0 ? `${flowers.length} flowers · ${flowers.reduce((a, f) => a + f.petals.length, 0)} petals` : 'Garden empty'}
-                  </span>
-                </div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                <StartGrowthButton
-                  onStart={hasGrown ? handleRegenerate : handleStartGrowth}
-                  isRegenerate={hasGrown}
-                  canRegenerate={!hasGrown || inputChanged}
-                />
-                {hasGrown && (
-                  <button
-                    onClick={() => setShowResetConfirm(true)}
-                    disabled={isLoading}
-                    style={{ display: 'flex', alignItems: 'center', gap: 5, height: 38, padding: '0 14px', borderRadius: 10, border: '1.5px solid rgba(255,60,60,0.45)', background: isLoading ? 'rgba(255,60,60,0.06)' : 'rgba(255,60,60,0.12)', color: isLoading ? 'rgba(255,80,80,0.4)' : '#ff5050', fontSize: 12, fontWeight: 700, cursor: isLoading ? 'not-allowed' : 'pointer', opacity: isLoading ? 0.5 : 1, transition: 'all 0.2s', whiteSpace: 'nowrap', flexShrink: 0 }}
-                    onMouseEnter={e => { if (!isLoading) (e.currentTarget as HTMLElement).style.background = 'rgba(255,60,60,0.22)'; }}
-                    onMouseLeave={e => { if (!isLoading) (e.currentTarget as HTMLElement).style.background = 'rgba(255,60,60,0.12)'; }}
-                  >
-                    🗑 Reset
-                  </button>
-                )}
-              </div>
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-                <span style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
-                  {isLoading && <span style={{ color: 'rgba(0,220,255,0.6)' }}>⟳ Processing...</span>}
-                  {generationStatus === 'success' && flowers.length > 0 && <span style={{ color: 'rgba(57,255,20,0.6)' }}>✓ Growth complete</span>}
+      <div className="flex flex-1 overflow-hidden" style={{ marginTop: 56 }}>
+        <LeftPanel />
+        <div className="flex-1 flex flex-col overflow-hidden relative">
+          {/* Action bar */}
+          <div style={{ display: 'flex', alignItems: 'center', padding: '0 20px', height: 52, flexShrink: 0, background: actionBarBg, borderBottom: `1px solid ${actionBarBorder}`, backdropFilter: 'blur(12px)', zIndex: 10, gap: 10, transition: 'background 0.3s ease' }}>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: statusDotColor, boxShadow: flowers.length > 0 ? '0 0 6px #39ff14' : 'none', flexShrink: 0 }} />
+                <span style={{ fontSize: 11, color: statusTextColor, whiteSpace: 'nowrap' }}>
+                  {flowers.length > 0 ? `${flowers.length} flowers · ${flowers.reduce((a, f) => a + f.petals.length, 0)} petals` : 'Garden empty'}
                 </span>
               </div>
             </div>
-
-            <div ref={canvasWrapperRef} className="flex-1 relative overflow-hidden">
-              <Canvas
-                onDeletePetal={handleDeletePetal}
-                onDeleteFlower={handleDeleteFlower}
-                onManualConnect={handleManualConnect}
-                pulseBright={pulseBright}
-                harvestPanelHeightPx={harvestPanelHeightPx}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              <StartGrowthButton
+                onStart={hasGrown ? handleRegenerate : handleStartGrowth}
+                isRegenerate={hasGrown}
+                canRegenerate={!hasGrown || inputChanged}
               />
-              <HarvestPanel onReplant={handleReplantInsight} />
+              {hasGrown && (
+                <button
+                  onClick={() => setShowResetConfirm(true)}
+                  disabled={isLoading}
+                  style={{ display: 'flex', alignItems: 'center', gap: 5, height: 38, padding: '0 14px', borderRadius: 10, border: '1.5px solid rgba(255,60,60,0.45)', background: isLoading ? 'rgba(255,60,60,0.06)' : 'rgba(255,60,60,0.12)', color: isLoading ? 'rgba(255,80,80,0.4)' : '#ff5050', fontSize: 12, fontWeight: 700, cursor: isLoading ? 'not-allowed' : 'pointer', opacity: isLoading ? 0.5 : 1, transition: 'all 0.2s', whiteSpace: 'nowrap', flexShrink: 0 }}
+                  onMouseEnter={e => { if (!isLoading) (e.currentTarget as HTMLElement).style.background = 'rgba(255,60,60,0.22)'; }}
+                  onMouseLeave={e => { if (!isLoading) (e.currentTarget as HTMLElement).style.background = 'rgba(255,60,60,0.12)'; }}
+                >
+                  🗑 Reset
+                </button>
+              )}
+            </div>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+              <span style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
+                {isLoading && <span style={{ color: 'rgba(0,220,255,0.6)' }}>⟳ Processing...</span>}
+                {generationStatus === 'success' && flowers.length > 0 && <span style={{ color: isDark ? 'rgba(57,255,20,0.6)' : '#1a7700' }}>✓ Growth complete</span>}
+              </span>
             </div>
           </div>
-          <RightPanel onRegenerate={handleRegenerate} />
+
+          <div ref={canvasWrapperRef} className="flex-1 relative overflow-hidden">
+            <Canvas
+              onDeletePetal={handleDeletePetal}
+              onDeleteFlower={handleDeleteFlower}
+              onManualConnect={handleManualConnect}
+              pulseBright={pulseBright}
+              harvestPanelHeightPx={harvestPanelHeightPx}
+            />
+            <HarvestPanel onReplant={handleReplantInsight} />
+          </div>
         </div>
+        <RightPanel onRegenerate={handleRegenerate} />
       </div>
-    </>
+    </div>
   );
 }

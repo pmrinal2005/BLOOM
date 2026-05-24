@@ -22,26 +22,16 @@ interface Props {
 
 function getSolidFill(colorTheme: string): string {
   const map: Record<string, string> = {
-    cyan:   '#004d4d',
-    green:  '#1a4d00',
-    pink:   '#4d0044',
-    orange: '#4d2600',
-    blue:   '#002966',
-    purple: '#2d0066',
-    yellow: '#4d4400',
+    cyan:   '#004d4d', green:  '#1a4d00', pink:   '#4d0044',
+    orange: '#4d2600', blue:   '#002966', purple: '#2d0066', yellow: '#4d4400',
   };
   return map[colorTheme] ?? '#004d4d';
 }
 
 function getPetalFill(colorTheme: string): string {
   const map: Record<string, string> = {
-    cyan:   '#006666',
-    green:  '#1f6600',
-    pink:   '#660055',
-    orange: '#663300',
-    blue:   '#003399',
-    purple: '#3d0080',
-    yellow: '#665c00',
+    cyan:   '#006666', green:  '#1f6600', pink:   '#660055',
+    orange: '#663300', blue:   '#003399', purple: '#3d0080', yellow: '#665c00',
   };
   return map[colorTheme] ?? '#006666';
 }
@@ -64,14 +54,14 @@ export function FlowerTooltip({
   flipLeft = false,
 }: TooltipProps) {
   const tooltipW = 240;
-  // Dynamic height: header(56) + petals(each 34px, full text wrap) + delete button(44) + padding
   const petalRowH = 34;
   const tooltipH = 56 + flower.petals.length * petalRowH + 44;
   const xOffset = flipLeft ? -(tooltipW + size * 0.65 + 12) : size * 0.65 + 10;
 
   if (showDeleteConfirm) {
     return (
-      <g>
+      // Task 9: use style={{ isolation: 'isolate' }} equivalent via z-index boosted wrapper
+      <g style={{ isolation: 'isolate' } as any}>
         <rect x={-96} y={-52} width={192} height={94} rx={10}
           fill="rgba(9,13,24,0.99)" stroke="rgba(255,70,70,0.4)" strokeWidth={1.5} />
         <text x={0} y={-28} textAnchor="middle"
@@ -111,8 +101,8 @@ export function FlowerTooltip({
   }
 
   return (
-    <g>
-      {/* Invisible bridge to prevent gap mouseLeave */}
+    <g style={{ isolation: 'isolate' } as any}>
+      {/* Invisible bridge */}
       <rect
         x={flipLeft ? xOffset - 8 : size * 0.55}
         y={-tooltipH / 2}
@@ -146,77 +136,24 @@ export function FlowerTooltip({
         stroke={`${color.stroke}22`} strokeWidth={1}
       />
 
-      {/* Petals — full text shown via foreignObject for wrapping */}
       {flower.petals.map((petal, i) => {
         const rowY = -tooltipH / 2 + 48 + i * petalRowH;
-        const maxNameLen = 26;
-        const displayName = petal.sub_entity_name.length > maxNameLen
-          ? petal.sub_entity_name  // show full in foreignObject
-          : petal.sub_entity_name;
-
         return (
           <g key={petal.id}>
-            {/* Dot */}
-            <circle
-              cx={xOffset + 20} cy={rowY + 10}
-              r={3.5} fill={getPetalFill(flower.color_theme)} stroke={color.stroke} strokeWidth={1}
-            />
-            {/* Full-text petal name via foreignObject */}
-            <foreignObject
-              x={xOffset + 30} y={rowY}
-              width={tooltipW - 58} height={petalRowH}
-            >
-              <div
-                style={{
-                  fontSize: 9,
-                  color: 'rgba(255,255,255,0.78)',
-                  fontFamily: 'Inter, sans-serif',
-                  lineHeight: 1.4,
-                  paddingTop: 2,
-                  wordBreak: 'break-word',
-                  overflowWrap: 'break-word',
-                  whiteSpace: 'normal',
-                }}
-              >
-                <span style={{ fontWeight: 600, color: color.text }}>
-                  {petal.petal_label}:
-                </span>{' '}
-                {displayName}
+            <circle cx={xOffset + 20} cy={rowY + 10} r={3.5} fill={getPetalFill(flower.color_theme)} stroke={color.stroke} strokeWidth={1} />
+            <foreignObject x={xOffset + 30} y={rowY} width={tooltipW - 58} height={petalRowH}>
+              <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.78)', fontFamily: 'Inter, sans-serif', lineHeight: 1.4, paddingTop: 2, wordBreak: 'break-word', overflowWrap: 'break-word', whiteSpace: 'normal' }}>
+                <span style={{ fontWeight: 600, color: color.text }}>{petal.petal_label}:</span>{' '}{petal.sub_entity_name}
               </div>
             </foreignObject>
-
-            {/* Delete petal button — uses stopPropagation on both mousedown AND click */}
             <g
-              onMouseDown={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-              }}
-              onClick={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                onDeletePetal(flower.id, petal.id);
-              }}
+              onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
+              onClick={(e) => { e.stopPropagation(); e.preventDefault(); onDeletePetal(flower.id, petal.id); }}
               style={{ cursor: 'pointer' }}
             >
-              <circle
-                cx={xOffset + tooltipW - 14}
-                cy={rowY + 10}
-                r={11}
-                fill="rgba(255,60,60,0.15)"
-              />
-              <text
-                x={xOffset + tooltipW - 14}
-                y={rowY + 15}
-                textAnchor="middle"
-                style={{
-                  fill: 'rgba(255,80,80,0.9)',
-                  fontSize: 16,
-                  fontFamily: 'Inter, sans-serif',
-                  userSelect: 'none',
-                  fontWeight: 700,
-                  pointerEvents: 'none',
-                }}
-              >
+              <circle cx={xOffset + tooltipW - 14} cy={rowY + 10} r={11} fill="rgba(255,60,60,0.15)" />
+              <text x={xOffset + tooltipW - 14} y={rowY + 15} textAnchor="middle"
+                style={{ fill: 'rgba(255,80,80,0.9)', fontSize: 16, fontFamily: 'Inter, sans-serif', userSelect: 'none', fontWeight: 700, pointerEvents: 'none' }}>
                 −
               </text>
             </g>
@@ -230,16 +167,10 @@ export function FlowerTooltip({
         onClick={(e) => { e.stopPropagation(); e.preventDefault(); setShowDeleteConfirm(true); }}
         style={{ cursor: 'pointer' }}
       >
-        <rect
-          x={xOffset + 12} y={-tooltipH / 2 + tooltipH - 38}
-          width={tooltipW - 24} height={26} rx={7}
-          fill="rgba(255,50,50,0.09)" stroke="rgba(255,50,50,0.28)" strokeWidth={1}
-        />
-        <text
-          x={xOffset + tooltipW / 2} y={-tooltipH / 2 + tooltipH - 22}
-          textAnchor="middle"
-          style={{ fill: 'rgba(255,80,80,0.8)', fontSize: 9, fontFamily: 'Inter, sans-serif', pointerEvents: 'none' }}
-        >
+        <rect x={xOffset + 12} y={-tooltipH / 2 + tooltipH - 38} width={tooltipW - 24} height={26} rx={7}
+          fill="rgba(255,50,50,0.09)" stroke="rgba(255,50,50,0.28)" strokeWidth={1} />
+        <text x={xOffset + tooltipW / 2} y={-tooltipH / 2 + tooltipH - 22} textAnchor="middle"
+          style={{ fill: 'rgba(255,80,80,0.8)', fontSize: 9, fontFamily: 'Inter, sans-serif', pointerEvents: 'none' }}>
           🗑 Delete Flower
         </text>
       </g>
@@ -261,7 +192,6 @@ function NeonFlowerShape({
   petalPhase: number;
   flowerId: string;
 }) {
-  // Support 1-8 petals dynamically
   const actualPetals = Math.max(1, Math.min(8, petalCount));
   const coreR = size * 0.22;
   const petalLen = size * 0.42;
@@ -290,14 +220,9 @@ function NeonFlowerShape({
         const petalStretch = 1 + Math.sin(petalPhase * Math.PI * 2) * 0.07;
         const petalTilt = Math.sin(petalPhase * Math.PI * 2) * 3.5;
         return (
-          <ellipse
-            key={i}
-            cx={pcx} cy={pcy}
-            rx={petalW * 0.46}
-            ry={petalLen * 0.5 * petalStretch}
-            fill={petalFill}
-            stroke={color.stroke}
-            strokeWidth={1.6}
+          <ellipse key={i} cx={pcx} cy={pcy}
+            rx={petalW * 0.46} ry={petalLen * 0.5 * petalStretch}
+            fill={petalFill} stroke={color.stroke} strokeWidth={1.6}
             transform={`rotate(${rotDeg + petalTilt}, ${pcx}, ${pcy})`}
           />
         );
@@ -336,16 +261,13 @@ export default function FlowerNode({
     cancelTimers();
     onHover(flower.id);
     showTimerRef.current = setTimeout(() => {
-      if (insideRef.current && !isDraggingRef.current) {
-        setTooltipVisible(true);
-      }
+      if (insideRef.current && !isDraggingRef.current) setTooltipVisible(true);
     }, 280);
   }, [flower.id, onHover, cancelTimers]);
 
   const handleGroupLeave = useCallback((e: React.MouseEvent) => {
     const relatedTarget = e.relatedTarget as Element | null;
     if (relatedTarget && e.currentTarget.contains(relatedTarget)) return;
-
     insideRef.current = false;
     cancelTimers();
     hideTimerRef.current = setTimeout(() => {
@@ -457,15 +379,13 @@ export default function FlowerNode({
                 fill={getPetalFill(flower.color_theme)} stroke={color.stroke} strokeWidth={1.4}
                 style={{ filter: `drop-shadow(0 0 3px ${color.stroke})` }}
               />
-              <circle cx={Math.cos(angle) * dotR} cy={Math.sin(angle) * dotR} r={2}
-                fill={color.stroke} opacity={0.9}
-              />
+              <circle cx={Math.cos(angle) * dotR} cy={Math.sin(angle) * dotR} r={2} fill={color.stroke} opacity={0.9} />
             </g>
           );
         })}
       </g>
 
-      {/* Tooltip — only shows for THIS flower when isHovered is true AND tooltip is visible */}
+      {/* Task 9: tooltip rendered LAST inside this g so it paints on top in SVG order */}
       {tooltipVisible && isHovered && (
         <FlowerTooltip
           flower={flower}

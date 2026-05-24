@@ -1,0 +1,7 @@
+{
+  "rewrites": [
+    { "source": "/home", "destination": "/" },
+    { "source": "/dashboard", "destination": "/" },
+    { "source": "/((?!api/).*)", "destination": "/" }
+  ]
+}

@@ -110,9 +110,9 @@ function HarvestCard({ result, onReplant }: { result: HarvestResult; onReplant: 
 
   // Task 1: Theme-aware card colors
   const cardBg = isDark ? 'rgba(255,255,255,0.025)' : 'rgba(255,255,255,0.92)';
-  const titleColor = isDark ? 'rgba(255,255,255,0.88)' : 'rgba(0,0,0,0.85)';
-  const summaryColor = isDark ? 'rgba(255,255,255,0.48)' : 'rgba(0,0,0,0.58)';
-  const pointColor = isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.62)';
+  const titleColor = isDark ? 'rgba(255,255,255,0.88)' : 'rgba(0,0,0,0.88)';  // was 0.85
+  const summaryColor = isDark ? 'rgba(255,255,255,0.48)' : 'rgba(0,0,0,0.65)'; // was 0.58
+  const pointColor = isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.68)';   // was 0.62
 
   return (
     <>

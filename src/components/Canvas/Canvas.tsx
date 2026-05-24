@@ -34,7 +34,7 @@ export default function Canvas({
     deletingFlowerId, rebalancing,
     compactView, setCompactView, updateFlower,
     draggingConnection, setDraggingConnection,
-    theme,
+    theme, hasGrown,
   } = useStore();
 
   const isDark = theme === 'dark';
@@ -198,6 +198,9 @@ export default function Canvas({
   const isEmpty = generationStatus === 'empty';
   const isError = generationStatus === 'error';
 
+  // Task 7: hide the idle hint after initial creation is done (hasGrown)
+  const showIdleHint = !hasContent && !isLoading && !isError && generationStatus === 'idle' && !hasGrown;
+
   const rubberEnd = draggingConnection?.snapTargetId
     ? draggingConnection.snapTargetId === 'orb'
       ? { x: 0, y: 0 }
@@ -207,7 +210,6 @@ export default function Canvas({
         })()
     : { x: draggingConnection?.cursorX ?? 0, y: draggingConnection?.cursorY ?? 0 };
 
-  // Task 1: theme-aware toolbar buttons
   const btnBase: React.CSSProperties = {
     width: 38, height: 38, borderRadius: 12,
     display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -227,7 +229,6 @@ export default function Canvas({
     boxShadow: '0 2px 14px rgba(0,220,255,0.3), inset 0 1px 0 rgba(255,255,255,0.12)',
   };
 
-  // Task 1: canvas background
   const canvasBg = isDark ? '#080d18' : '#eef2ff';
   const dotColor = isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,80,0.18)';
   const textOverlayColor = isDark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.4)';
@@ -268,6 +269,7 @@ export default function Canvas({
             />
           ))}
 
+          {/* Task 9: flowers rendered AFTER connections, orb rendered last so tooltips use SVG foreignObject above */}
           {flowers.map(flower => (
             <FlowerNode
               key={flower.id} flower={flower}
@@ -317,7 +319,8 @@ export default function Canvas({
         </g>
 
         {/* State overlays */}
-        {!hasContent && !isLoading && !isError && generationStatus === 'idle' && (
+        {/* Task 7: only show idle hint if not yet grown */}
+        {showIdleHint && (
           <g>
             <text x="50%" y="35%" textAnchor="middle" style={{ fill: textOverlayColor, fontSize: 14, fontFamily: 'Inter, sans-serif' }}>
               Add a Problem Description on the left,

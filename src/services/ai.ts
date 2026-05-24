@@ -143,6 +143,36 @@ function formatPetalDiversityGuidance(existingFlowers: Flower[]): string {
   return lines.join('\n');
 }
 
+// ── CONNECTION STRATEGY GUIDANCE ──
+// Builds connection rules for the AI prompt based on generation context
+function formatConnectionStrategyGuidance(existingFlowers: Flower[]): string {
+  const isInitialGeneration = existingFlowers.length === 0;
+
+  if (isInitialGeneration) {
+    return `CONNECTION RULES (INITIAL GENERATION):
+- This is the FIRST generation — ALL new flowers MUST connect to the central orb ("orb")
+- Every flower must have at least one connection where source_type="orb", source_id="orb", target_type="flower", target_id=<flower_id>
+- Flowers MAY ALSO connect to each other (flower-to-flower) in addition to the orb connection
+- Format for orb connection: { "source_type": "orb", "source_id": "orb", "target_type": "flower", "target_id": "flower-X" }
+- Format for flower-to-flower: { "source_type": "flower", "source_id": "flower-X", "target_type": "flower", "target_id": "flower-Y" }
+- MANDATORY: Every single flower must appear as target_id in at least one orb connection`;
+  }
+
+  // Subsequent generation: prefer inter-flower connections
+  const existingIds = existingFlowers.map(f => f.id);
+  return `CONNECTION RULES (SUBSEQUENT GENERATION — IMPORTANT):
+- This is NOT the first generation. Existing flower IDs available for connections: [${existingIds.join(', ')}]
+- NEW flowers should PRIMARILY connect to existing flowers or other new flowers (HIGH probability ~70-80%)
+- NEW flowers should RARELY connect to the central orb (LOW probability ~10-15%)
+- NEW flowers MAY exist independently with no connections (VERY RARE ~5-10%, only if conceptually isolated)
+- PREFERRED: flower-to-flower connections showing conceptual relationships between entities
+- Format for flower-to-flower: { "source_type": "flower", "source_id": "<existing_or_new_flower_id>", "target_type": "flower", "target_id": "<new_flower_id>" }
+- Format for orb connection (use sparingly): { "source_type": "orb", "source_id": "orb", "target_type": "flower", "target_id": "<flower_id>" }
+- STRATEGY: Connect new flowers to the most conceptually related existing flower. Create a web/graph structure, NOT a hub-and-spoke.
+- Each new flower should have 1-3 connections total (to existing flowers, other new flowers, or rarely to orb)
+- The relationship_description should explain WHY these two concepts are connected`;
+}
+
 async function urlToInlineDataPart(
   url: string, label: string
 ): Promise<{ inlineData: { data: string; mimeType: string } } | null> {
@@ -250,6 +280,22 @@ function buildSystemInstruction(
   // Task 2: dynamic petal diversity guidance
   const petalDiversityGuidance = formatPetalDiversityGuidance(existingFlowers);
 
+  // Connection strategy guidance based on whether this is initial or subsequent generation
+  const connectionStrategyGuidance = formatConnectionStrategyGuidance(existingFlowers);
+
+  // Determine connection example based on generation context
+  const isInitialGeneration = existingFlowers.length === 0;
+  const connectionExample = isInitialGeneration
+    ? `"connections": [ 
+        { "id": "conn-1", "source_type": "orb", "source_id": "orb", "target_type": "flower", "target_id": "flower-1", "relationship_description": "Core concept derived from problem domain", "is_manual": false },
+        { "id": "conn-2", "source_type": "orb", "source_id": "orb", "target_type": "flower", "target_id": "flower-2", "relationship_description": "Secondary exploration branch", "is_manual": false },
+        { "id": "conn-3", "source_type": "flower", "source_id": "flower-1", "target_type": "flower", "target_id": "flower-2", "relationship_description": "Conceptual sibling relationship", "is_manual": false }
+      ]`
+    : `"connections": [ 
+        { "id": "conn-1", "source_type": "flower", "source_id": "${existingFlowers[0]?.id ?? 'flower-1'}", "target_type": "flower", "target_id": "flower-new-1", "relationship_description": "Extends the concept of...", "is_manual": false },
+        { "id": "conn-2", "source_type": "flower", "source_id": "flower-new-1", "target_type": "flower", "target_id": "flower-new-2", "relationship_description": "Builds upon by adding...", "is_manual": false }
+      ]`;
+
   return `You are the core design orchestration engine for ExpertBloom, an interactive concept-mapping platform.
 
 Growth Mode: ${growthMode}
@@ -288,6 +334,8 @@ PETAL COUNT RULES:
 - Do NOT enforce strict uniqueness — diversity is the goal, not a hard constraint
 - You CAN repeat a petal count if conceptually necessary, but try to minimize repetition
 
+${connectionStrategyGuidance}
+
 REASONING:
 ${showReasoning ? 'reasoning_stream: 3-15 steps based on complexity. Reference visual observations when images were analyzed.' : 'reasoning_stream: empty array []'}
 
@@ -310,7 +358,7 @@ REQUIRED JSON SHAPE:
         ]
       }
     ],
-    "connections": [ { "id": "conn-1", "source_type": "orb", "source_id": "orb", "target_type": "flower", "target_id": "flower-1", "relationship_description": "...", "is_manual": false } ]
+    ${connectionExample}
   },
   "harvest_panel": [
     { "id": "harvest-1", "tab_type": "Core Insights", "title": "...", "summary": "...", "content": { "paragraphs": ["..."], "key_points": ["..."] } }
@@ -337,6 +385,7 @@ function buildTextPrompt(payload: GenerationPayload): string {
     parts.push(`EXISTING ENTITIES — PRESERVE, do NOT duplicate names: [${names}]`);
     parts.push(`Existing IDs for connections: [${ids}]`);
     parts.push(`Existing petal counts: [${petalInfo}]`);
+    parts.push(`CONNECTION STRATEGY: Connect new flowers primarily to these existing flower IDs. Avoid connecting to central orb unless the concept is truly foundational/root-level.`);
   }
 
   if (payload.deletedEntities && payload.deletedEntities.length > 0)
@@ -346,11 +395,15 @@ function buildTextPrompt(payload: GenerationPayload): string {
   parts.push(`Growth mode: ${payload.growthMode}`);
   parts.push(`Creativity: ${payload.creativityLevel}`);
 
-  parts.push(
-    payload.existingFlowers?.length
-      ? `CONTEXT-AWARE UPDATE: Preserve existing flowers. Add NEW flowers with UNIQUE names. Prefer petal counts not yet represented in the garden. Return JSON only.`
-      : `INITIAL GENERATION: All flower names must be unique. Distribute petal counts across 1-8 range — maximize diversity. Return JSON only, start with {.`
-  );
+  if (payload.existingFlowers?.length) {
+    parts.push(
+      `CONTEXT-AWARE UPDATE: Preserve existing flowers. Add NEW flowers with UNIQUE names. Prefer petal counts not yet represented in the garden. Connect new flowers to existing flowers (preferred) rather than to the central orb. Return JSON only.`
+    );
+  } else {
+    parts.push(
+      `INITIAL GENERATION: All flower names must be unique. Distribute petal counts across 1-8 range — maximize diversity. EVERY flower MUST connect to the central orb. Return JSON only, start with {.`
+    );
+  }
 
   return parts.join('\n');
 }
@@ -433,6 +486,156 @@ function extractJSON(rawText: string): any {
   }
 }
 
+// ── POST-PROCESSING: Enforce connection rules after AI response ──
+// This ensures the connection strategy is properly applied even if the AI
+// doesn't perfectly follow instructions.
+function enforceConnectionRules(
+  parsedConnections: any[],
+  newFlowerIds: string[],
+  existingFlowers: Flower[],
+  allNewFlowers: any[]
+): any[] {
+  const isInitialGeneration = existingFlowers.length === 0;
+  const now = Date.now();
+
+  if (isInitialGeneration) {
+    // RULE 1: During initial generation, ALL flowers MUST connect to the central orb
+    const connectedToOrb = new Set<string>();
+    const validConnections: any[] = [];
+
+    // First pass: collect existing orb connections and valid flower-to-flower connections
+    for (const conn of parsedConnections) {
+      if (conn.source_type === 'orb' && conn.source_id === 'orb' && conn.target_id) {
+        connectedToOrb.add(conn.target_id);
+        validConnections.push(conn);
+      } else if (conn.source_type === 'flower' && conn.target_type === 'flower' && conn.target_id) {
+        // Keep flower-to-flower connections (additional connections are fine)
+        validConnections.push(conn);
+      }
+    }
+
+    // Second pass: ensure every new flower has an orb connection
+    for (const flowerId of newFlowerIds) {
+      if (!connectedToOrb.has(flowerId)) {
+        // Find the flower name for a meaningful description
+        const flower = allNewFlowers.find((f: any) => f.id === flowerId);
+        const entityName = flower?.entity_name ?? 'concept';
+        validConnections.push({
+          id: `conn-orb-enforce-${flowerId}-${now}`,
+          source_type: 'orb',
+          source_id: 'orb',
+          target_type: 'flower',
+          target_id: flowerId,
+          relationship_description: `Core concept: ${entityName}`,
+          is_manual: false,
+        });
+      }
+    }
+
+    return validConnections;
+  } else {
+    // RULE 2: Subsequent generation — flowers should primarily connect to other flowers
+    // Enforce: remove excessive orb connections, ensure most flowers connect to existing flowers
+    const existingFlowerIds = existingFlowers.map(f => f.id);
+    const allAvailableFlowerIds = [...existingFlowerIds, ...newFlowerIds];
+    const validConnections: any[] = [];
+    const flowersWithAnyConnection = new Set<string>();
+    const flowersConnectedToOrb = new Set<string>();
+
+    // First pass: categorize connections
+    for (const conn of parsedConnections) {
+      if (!conn.target_id) continue;
+
+      if (conn.source_type === 'orb' && conn.source_id === 'orb') {
+        // Orb connection for a new flower — keep it but track it
+        if (newFlowerIds.includes(conn.target_id)) {
+          flowersConnectedToOrb.add(conn.target_id);
+          // We'll decide later whether to keep orb connections
+          validConnections.push(conn);
+          flowersWithAnyConnection.add(conn.target_id);
+        }
+      } else if (conn.source_type === 'flower' && conn.target_type === 'flower') {
+        // Flower-to-flower connection — always preferred
+        validConnections.push(conn);
+        flowersWithAnyConnection.add(conn.target_id);
+        if (newFlowerIds.includes(conn.source_id)) {
+          flowersWithAnyConnection.add(conn.source_id);
+        }
+      }
+    }
+
+    // Second pass: For new flowers that ONLY have orb connections and no flower-to-flower,
+    // try to replace the orb connection with a flower-to-flower connection
+    for (const flowerId of newFlowerIds) {
+      const hasFlowerConnection = validConnections.some(
+        c => c.source_type === 'flower' && c.target_type === 'flower' &&
+          (c.target_id === flowerId || c.source_id === flowerId)
+      );
+
+      if (!hasFlowerConnection && flowersConnectedToOrb.has(flowerId)) {
+        // This flower only connects to orb — add a flower-to-flower connection
+        // Pick the most relevant existing flower (use simple heuristic: first available)
+        const targetExistingFlower = existingFlowerIds.length > 0
+          ? existingFlowerIds[Math.floor(Math.random() * existingFlowerIds.length)]
+          : newFlowerIds.find(id => id !== flowerId);
+
+        if (targetExistingFlower) {
+          const flower = allNewFlowers.find((f: any) => f.id === flowerId);
+          const entityName = flower?.entity_name ?? 'concept';
+          validConnections.push({
+            id: `conn-f2f-enforce-${flowerId}-${now}`,
+            source_type: 'flower',
+            source_id: targetExistingFlower,
+            target_type: 'flower',
+            target_id: flowerId,
+            relationship_description: `Conceptually extends: ${entityName}`,
+            is_manual: false,
+          });
+
+          // Now remove the orb connection for this flower since it has a flower connection
+          const orbConnIdx = validConnections.findIndex(
+            c => c.source_type === 'orb' && c.source_id === 'orb' && c.target_id === flowerId
+          );
+          if (orbConnIdx !== -1) {
+            validConnections.splice(orbConnIdx, 1);
+          }
+        }
+      }
+    }
+
+    // Third pass: For new flowers that have NO connections at all (the rare "independent" case)
+    // We allow ~5-10% to be independent, but if there are too many, connect them
+    const unconnectedFlowers = newFlowerIds.filter(id => !flowersWithAnyConnection.has(id) &&
+      !validConnections.some(c => c.target_id === id || c.source_id === id));
+
+    // Allow at most 1 independent flower (for the "rare case" rule)
+    const maxIndependent = Math.max(0, Math.floor(newFlowerIds.length * 0.1));
+    const flowersToConnect = unconnectedFlowers.slice(maxIndependent);
+
+    for (const flowerId of flowersToConnect) {
+      const targetExistingFlower = existingFlowerIds.length > 0
+        ? existingFlowerIds[Math.floor(Math.random() * existingFlowerIds.length)]
+        : newFlowerIds.find(id => id !== flowerId);
+
+      if (targetExistingFlower) {
+        const flower = allNewFlowers.find((f: any) => f.id === flowerId);
+        const entityName = flower?.entity_name ?? 'concept';
+        validConnections.push({
+          id: `conn-f2f-orphan-${flowerId}-${now}`,
+          source_type: 'flower',
+          source_id: targetExistingFlower,
+          target_type: 'flower',
+          target_id: flowerId,
+          relationship_description: `Related concept: ${entityName}`,
+          is_manual: false,
+        });
+      }
+    }
+
+    return validConnections;
+  }
+}
+
 async function processAPIResponse(
   parsed: any,
   projectId: string,
@@ -500,7 +703,16 @@ async function processAPIResponse(
     };
   });
 
-  const connections: Connection[] = (parsed.canvas_layout?.connections ?? [])
+  // Extract new flower IDs for connection enforcement
+  const newFlowerIds = flowers.map(f => f.id);
+
+  // Apply connection rules enforcement
+  const rawConnections = parsed.canvas_layout?.connections ?? [];
+  const enforcedConnections = enforceConnectionRules(
+    rawConnections, newFlowerIds, existingFlowers, rawFlowers
+  );
+
+  const connections: Connection[] = enforcedConnections
     .map((conn: any, i: number) => ({
       id: conn.id ?? `conn-${i + 1}-${Date.now()}`,
       project_id: projectId,
