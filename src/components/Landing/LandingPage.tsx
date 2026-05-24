@@ -466,13 +466,13 @@ function HeroFeatureCards() {
      icon: '🌱',
      title: 'Plant Your Problem Matrix',
      desc: 'Upload real-world images or video — urban decay, medical scans, factory bottlenecks, personal struggle footage. Bloom\'s AI vision encoder immediately begins reading spatial patterns, textures, and temporal cues directly from your visual input.',
-     bg: "url('public/images/problem_matrix.png') center/cover no-repeat",
+     bg: "url('/images/problem_matrix.png') center/cover no-repeat",
     },
     {
       icon: '🔀',
       title: 'Seed Inspiration Matrices',
       desc: 'Add 2–4 wildly distant domain references — quantum interference patterns, 16th-century manuscripts, bird murmurations, indigenous weaving. Gemma 4\'s 128-expert MoE router collides them with your problem in real time, generating hybrid concepts that have never existed.',
-      bg: "url('public/images/inspiration_matrices.PNG') center/cover no-repeat",
+      bg: "url('/images/inspiration_matrices.PNG') center/cover no-repeat",
 
     },
     {
