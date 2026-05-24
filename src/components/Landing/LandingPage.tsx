@@ -92,14 +92,24 @@ const TESTIMONIALS = [
   {
     quote: "Bloom took my urban decay footage and mycelium growth video and synthesized a regenerative city infrastructure concept I'd never have reached alone. Gemma 4's reasoning trace bloomed in real time.",
     color: ACCENT_CYAN,
+    name: " ",
+    avatar: " ",
+    role: " ",
   },
   {
     quote: "I planted a medical scan and a quantum interference pattern. Bloom's MoE router collided them and produced a diagnostic hypothesis my entire team found groundbreaking.",
     color: ACCENT_PURPLE,
+    name: " ",
+    avatar: " ",
+    role: " ",
+
   },
   {
     quote: "The living vine graph showing expert activation in real time is unlike anything I've seen. You watch Gemma 4 think — and the ideas that emerge are genuinely novel.",
     color: ACCENT_PINK,
+    name: " ",
+    avatar: " ",
+    role: " ",
   },
 ];
 
