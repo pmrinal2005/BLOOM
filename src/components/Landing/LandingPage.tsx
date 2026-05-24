@@ -456,7 +456,7 @@ function HeroFeatureCards() {
      icon: '🌱',
      title: 'Plant Your Problem Matrix',
      desc: 'Upload real-world images or video — urban decay, medical scans, factory bottlenecks, personal struggle footage. Bloom\'s AI vision encoder immediately begins reading spatial patterns, textures, and temporal cues directly from your visual input.',
-     bg: "url('public/images/problem_matrix.PNG') center/cover no-repeat",
+     bg: "url('public/images/problem_matrix.png') center/cover no-repeat",
     },
     {
       icon: '🔀',
