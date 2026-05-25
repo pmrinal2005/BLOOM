@@ -1,5 +1,5 @@
 // C:\Users\mrutu\OneDrive\Desktop\bloom\src\components\Canvas\FlowerNode.tsx
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { Flower } from '../../store/useStore';
 import { getColorConfig } from '../../utils/layout';
 
@@ -17,6 +17,10 @@ interface Props {
   onDeleteFlower: (flowerId: string) => void;
   onEditFlower: (flowerId: string, name: string) => void;
   onDragStart?: (e: React.MouseEvent, flowerId: string) => void;
+  // NEW: parent-controlled tooltip lifecycle so tooltip can be rendered on the top layer
+  onRequestShowTooltip?: (flowerId: string) => void;
+  onRequestHideTooltip?: () => void;
+  onCancelHideTooltip?: () => void;
   appearing?: boolean;
 }
 
@@ -45,6 +49,9 @@ interface TooltipProps {
   showDeleteConfirm: boolean;
   setShowDeleteConfirm: (v: boolean) => void;
   flipLeft?: boolean;
+  // NEW: hover handlers so the lifted tooltip can keep itself alive while hovered
+  onTooltipMouseEnter?: () => void;
+  onTooltipMouseLeave?: () => void;
 }
 
 export function FlowerTooltip({
@@ -52,6 +59,8 @@ export function FlowerTooltip({
   onDeletePetal, onDeleteFlower,
   showDeleteConfirm, setShowDeleteConfirm,
   flipLeft = false,
+  onTooltipMouseEnter,
+  onTooltipMouseLeave,
 }: TooltipProps) {
   const tooltipW = 240;
   const petalRowH = 34;
@@ -60,8 +69,10 @@ export function FlowerTooltip({
 
   if (showDeleteConfirm) {
     return (
-      // Task 9: use style={{ isolation: 'isolate' }} equivalent via z-index boosted wrapper
-      <g style={{ isolation: 'isolate' } as any}>
+      <g
+        onMouseEnter={onTooltipMouseEnter}
+        onMouseLeave={onTooltipMouseLeave}
+      >
         <rect x={-96} y={-52} width={192} height={94} rx={10}
           fill="rgba(9,13,24,0.99)" stroke="rgba(255,70,70,0.4)" strokeWidth={1.5} />
         <text x={0} y={-28} textAnchor="middle"
@@ -101,8 +112,11 @@ export function FlowerTooltip({
   }
 
   return (
-    <g style={{ isolation: 'isolate' } as any}>
-      {/* Invisible bridge */}
+    <g
+      onMouseEnter={onTooltipMouseEnter}
+      onMouseLeave={onTooltipMouseLeave}
+    >
+      {/* Invisible bridge between flower and tooltip — keeps hover alive while traversing the gap */}
       <rect
         x={flipLeft ? xOffset - 8 : size * 0.55}
         y={-tooltipH / 2}
@@ -239,56 +253,59 @@ function NeonFlowerShape({
 export default function FlowerNode({
   flower, isDeleting, isHovered, isSelected,
   compactView, isSnapTarget = false, canvasZoom = 1,
-  onHover, onSelect, onDeletePetal, onDeleteFlower, onDragStart,
+  onHover, onSelect, onDragStart,
+  onRequestShowTooltip, onRequestHideTooltip, onCancelHideTooltip,
 }: Props) {
-  const [tooltipVisible, setTooltipVisible] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-
   const insideRef = useRef(false);
   const showTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDraggingRef = useRef(false);
 
-  const cancelTimers = useCallback(() => {
+  const cancelShowTimer = useCallback(() => {
     if (showTimerRef.current) { clearTimeout(showTimerRef.current); showTimerRef.current = null; }
-    if (hideTimerRef.current) { clearTimeout(hideTimerRef.current); hideTimerRef.current = null; }
   }, []);
 
   const handleGroupEnter = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     if (isDraggingRef.current) return;
     insideRef.current = true;
-    cancelTimers();
+    cancelShowTimer();
+    // Cancel any pending hide from the parent (we are back over the flower)
+    onCancelHideTooltip?.();
     onHover(flower.id);
     showTimerRef.current = setTimeout(() => {
-      if (insideRef.current && !isDraggingRef.current) setTooltipVisible(true);
+      if (insideRef.current && !isDraggingRef.current) {
+        onRequestShowTooltip?.(flower.id);
+      }
     }, 280);
-  }, [flower.id, onHover, cancelTimers]);
+  }, [flower.id, onHover, cancelShowTimer, onRequestShowTooltip, onCancelHideTooltip]);
 
   const handleGroupLeave = useCallback((e: React.MouseEvent) => {
     const relatedTarget = e.relatedTarget as Element | null;
     if (relatedTarget && e.currentTarget.contains(relatedTarget)) return;
     insideRef.current = false;
-    cancelTimers();
-    hideTimerRef.current = setTimeout(() => {
-      if (!insideRef.current) {
-        setTooltipVisible(false);
-        setShowDeleteConfirm(false);
-        onHover(null);
-      }
-    }, 120);
-  }, [onHover, cancelTimers]);
+    cancelShowTimer();
+    // Parent will debounce the actual hide; if mouse lands on the tooltip overlay,
+    // tooltip's own onMouseEnter cancels the hide before it fires.
+    onRequestHideTooltip?.();
+    onHover(null);
+  }, [onHover, cancelShowTimer, onRequestHideTooltip]);
 
-  useEffect(() => () => cancelTimers(), [cancelTimers]);
+  useEffect(() => () => cancelShowTimer(), [cancelShowTimer]);
+
   useEffect(() => {
-    if (isDeleting) { setTooltipVisible(false); setShowDeleteConfirm(false); }
-  }, [isDeleting]);
+    if (isDeleting) {
+      onRequestHideTooltip?.();
+    }
+  }, [isDeleting, onRequestHideTooltip]);
 
-  const [swayX, setSwayX] = useState(0);
-  const [swayRot, setSwayRot] = useState(0);
-  const [petalPhase, setPetalPhase] = useState(0);
+  // Sway / petal phase animation
   const animRef = useRef<number>(0);
   const startRef = useRef<number>(0);
+  const swayXRef = useRef(0);
+  const swayRotRef = useRef(0);
+  const petalPhaseRef = useRef(0);
+  // Use state only for re-render triggering, but throttled via rAF
+  const [, force] = useEffectForceRender();
 
   useEffect(() => {
     let h = 0;
@@ -304,14 +321,15 @@ export default function FlowerNode({
       const secondary = Math.sin(elapsed * freq * 1.618 * Math.PI * 2 + phaseOffset) * 0.38;
       const val = (primary + secondary) * 0.5;
       const zoomAmp = Math.max(1, 1.8 / Math.max(0.3, canvasZoom));
-      setSwayX(val * 3.5 * zoomAmp);
-      setSwayRot(val * 2.2 * zoomAmp);
-      setPetalPhase(val * 0.5 + 0.5 - 0.13);
+      swayXRef.current = val * 3.5 * zoomAmp;
+      swayRotRef.current = val * 2.2 * zoomAmp;
+      petalPhaseRef.current = val * 0.5 + 0.5 - 0.13;
+      force();
       animRef.current = requestAnimationFrame(animate);
     };
     animRef.current = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(animRef.current);
-  }, [flower.id, canvasZoom]);
+  }, [flower.id, canvasZoom, force]);
 
   const color = getColorConfig(flower.color_theme);
   const size = compactView ? 38 : 46;
@@ -338,8 +356,8 @@ export default function FlowerNode({
       onMouseDown={(e) => {
         if (e.button === 0 && onDragStart) {
           isDraggingRef.current = true;
-          cancelTimers();
-          setTooltipVisible(false);
+          cancelShowTimer();
+          onRequestHideTooltip?.();
           onDragStart(e, flower.id);
         }
       }}
@@ -367,8 +385,11 @@ export default function FlowerNode({
         <NeonFlowerShape
           color={color} colorTheme={flower.color_theme}
           petalCount={flower.petals.length} size={size}
-          glowIntensity={glowIntensity} swayX={swayX}
-          swayRot={swayRot} petalPhase={petalPhase} flowerId={flower.id}
+          glowIntensity={glowIntensity}
+          swayX={swayXRef.current}
+          swayRot={swayRotRef.current}
+          petalPhase={petalPhaseRef.current}
+          flowerId={flower.id}
         />
         {isHovered && flower.petals.map((petal, i) => {
           const angle = (i / flower.petals.length) * Math.PI * 2 - Math.PI / 2;
@@ -384,22 +405,19 @@ export default function FlowerNode({
           );
         })}
       </g>
-
-      {/* Task 9: tooltip rendered LAST inside this g so it paints on top in SVG order */}
-      {tooltipVisible && isHovered && (
-        <FlowerTooltip
-          flower={flower}
-          size={size}
-          color={color}
-          onDeletePetal={onDeletePetal}
-          onDeleteFlower={onDeleteFlower}
-          showDeleteConfirm={showDeleteConfirm}
-          setShowDeleteConfirm={setShowDeleteConfirm}
-          flipLeft={flower.position_x > 80}
-        />
-      )}
+      {/*
+        NOTE: Tooltip is no longer rendered here. It is rendered by Canvas.tsx as the very last
+        SVG layer (after all flowers and the central orb) so it always paints on top of everything.
+      */}
     </g>
   );
+}
+
+// Tiny hook to force a re-render via rAF without leaking unused state values
+import { useState as _useState } from 'react';
+function useEffectForceRender(): [number, () => void] {
+  const [tick, setTick] = _useState(0);
+  return [tick, () => setTick(t => (t + 1) % 1_000_000)];
 }
 
 export interface FlowerTooltipState {

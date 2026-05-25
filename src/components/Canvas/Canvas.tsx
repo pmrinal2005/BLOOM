@@ -2,7 +2,7 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { useStore } from '../../store/useStore';
 import CentralOrb from './CentralOrb';
-import FlowerNode from './FlowerNode';
+import FlowerNode, { FlowerTooltip } from './FlowerNode';
 import VineConnection from './VineConnection';
 import { ZoomIn, ZoomOut, RotateCcw, Minimize2 } from 'lucide-react';
 import { cubicBezierPath, getColorConfig } from '../../utils/layout';
@@ -50,6 +50,54 @@ export default function Canvas({
   const orbAnimRef = useRef<number>(0);
   const orbStartRef = useRef<number>(0);
   const [offScreenCount, setOffScreenCount] = useState(0);
+
+  // ===== Lifted tooltip state (so tooltip renders on the top SVG layer) =====
+  const [tooltipFlowerId, setTooltipFlowerId] = useState<string | null>(null);
+  const [showDeleteConfirmId, setShowDeleteConfirmId] = useState<string | null>(null);
+  const hideTooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const cancelHideTooltip = useCallback(() => {
+    if (hideTooltipTimerRef.current) {
+      clearTimeout(hideTooltipTimerRef.current);
+      hideTooltipTimerRef.current = null;
+    }
+  }, []);
+
+  const requestShowTooltip = useCallback((flowerId: string) => {
+    cancelHideTooltip();
+    setTooltipFlowerId(flowerId);
+  }, [cancelHideTooltip]);
+
+  const requestHideTooltip = useCallback(() => {
+    cancelHideTooltip();
+    hideTooltipTimerRef.current = setTimeout(() => {
+      setTooltipFlowerId(null);
+      setShowDeleteConfirmId(null);
+    }, 120);
+  }, [cancelHideTooltip]);
+
+  // Cleanup any pending hide on unmount
+  useEffect(() => () => {
+    if (hideTooltipTimerRef.current) clearTimeout(hideTooltipTimerRef.current);
+  }, []);
+
+  // If the hovered/tooltip flower gets deleted or unmounted, hide the tooltip immediately
+  useEffect(() => {
+    if (!tooltipFlowerId) return;
+    if (!flowers.find(f => f.id === tooltipFlowerId)) {
+      cancelHideTooltip();
+      setTooltipFlowerId(null);
+      setShowDeleteConfirmId(null);
+    }
+  }, [flowers, tooltipFlowerId, cancelHideTooltip]);
+
+  useEffect(() => {
+    if (deletingFlowerId && deletingFlowerId === tooltipFlowerId) {
+      cancelHideTooltip();
+      setTooltipFlowerId(null);
+      setShowDeleteConfirmId(null);
+    }
+  }, [deletingFlowerId, tooltipFlowerId, cancelHideTooltip]);
 
   useEffect(() => {
     const animate = (ts: number) => {
@@ -126,13 +174,17 @@ export default function Canvas({
     const flower = flowers.find(f => f.id === flowerId);
     if (!flower) return;
     isPanning.current = false;
+    // Make sure tooltip is dismissed during drag
+    cancelHideTooltip();
+    setTooltipFlowerId(null);
+    setShowDeleteConfirmId(null);
     const cp = screenToCanvas(e.clientX, e.clientY);
     setDraggingConnection({
       sourceType: 'flower', sourceId: flowerId,
       sourceX: flower.position_x, sourceY: flower.position_y,
       cursorX: cp.x, cursorY: cp.y, snapTargetId: null,
     });
-  }, [flowers, screenToCanvas, setDraggingConnection]);
+  }, [flowers, screenToCanvas, setDraggingConnection, cancelHideTooltip]);
 
   const handleOrbDragStart = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -198,7 +250,6 @@ export default function Canvas({
   const isEmpty = generationStatus === 'empty';
   const isError = generationStatus === 'error';
 
-  // Task 7: hide the idle hint after initial creation is done (hasGrown)
   const showIdleHint = !hasContent && !isLoading && !isError && generationStatus === 'idle' && !hasGrown;
 
   const rubberEnd = draggingConnection?.snapTargetId
@@ -233,6 +284,9 @@ export default function Canvas({
   const dotColor = isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,80,0.18)';
   const textOverlayColor = isDark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.4)';
 
+  // Resolve the active tooltip flower (for the top-layer render)
+  const activeTooltipFlower = tooltipFlowerId ? flowers.find(f => f.id === tooltipFlowerId) : null;
+
   return (
     <div className="relative w-full h-full overflow-hidden" style={{ background: canvasBg, transition: 'background 0.3s ease' }}>
       {/* Dot grid */}
@@ -261,6 +315,7 @@ export default function Canvas({
         onMouseLeave={() => { isPanning.current = false; if (draggingConnection) setDraggingConnection(null); }}
       >
         <g transform={`translate(${cx}, ${cy}) scale(${canvasZoom})`}>
+          {/* Layer 1: connections (bottom) */}
           {connections.map(conn => (
             <VineConnection key={conn.id} connection={conn} flowers={flowers}
               isHovered={hoveredConnectionId === conn.id}
@@ -269,7 +324,7 @@ export default function Canvas({
             />
           ))}
 
-          {/* Task 9: flowers rendered AFTER connections, orb rendered last so tooltips use SVG foreignObject above */}
+          {/* Layer 2: flowers */}
           {flowers.map(flower => (
             <FlowerNode
               key={flower.id} flower={flower}
@@ -284,20 +339,26 @@ export default function Canvas({
               onDeleteFlower={onDeleteFlower}
               onEditFlower={(id, name) => updateFlower(id, { entity_name: name })}
               onDragStart={handleFlowerDragStart}
+              onRequestShowTooltip={requestShowTooltip}
+              onRequestHideTooltip={requestHideTooltip}
+              onCancelHideTooltip={cancelHideTooltip}
               appearing
             />
           ))}
 
+          {/* Layer 3: central orb */}
           <g onMouseDown={handleOrbDragStart} style={{ cursor: 'crosshair' }}>
             <CentralOrb pulseBright={pulseBright} />
           </g>
 
+          {/* Snap-to-orb indicator */}
           {draggingConnection?.snapTargetId === 'orb' && (
             <circle cx={0} cy={0} r={54} fill="none" stroke="#00dcff" strokeWidth={3} opacity={0.85}
               style={{ animation: 'snapFlash 0.45s ease-in-out infinite alternate' }}
             />
           )}
 
+          {/* Rubber-band drag preview */}
           {draggingConnection && (
             <g style={{ pointerEvents: 'none' }}>
               <path
@@ -316,10 +377,38 @@ export default function Canvas({
               />
             </g>
           )}
+
+          {/*
+            ===== TOP LAYER: Flower Tooltip =====
+            Rendered LAST inside the transformed group so it paints on top of every
+            connection, every flower, and the central orb. The tooltip is translated
+            to the active flower's position so coordinates inside FlowerTooltip stay
+            local (just like before when it lived inside FlowerNode).
+          */}
+          {activeTooltipFlower && !draggingConnection && deletingFlowerId !== activeTooltipFlower.id && (
+            <g
+              transform={`translate(${activeTooltipFlower.position_x}, ${activeTooltipFlower.position_y})`}
+              style={{ pointerEvents: 'auto' }}
+            >
+              <FlowerTooltip
+                flower={activeTooltipFlower}
+                size={compactView ? 38 : 46}
+                color={getColorConfig(activeTooltipFlower.color_theme)}
+                onDeletePetal={onDeletePetal}
+                onDeleteFlower={onDeleteFlower}
+                showDeleteConfirm={showDeleteConfirmId === activeTooltipFlower.id}
+                setShowDeleteConfirm={(v) =>
+                  setShowDeleteConfirmId(v ? activeTooltipFlower.id : null)
+                }
+                flipLeft={activeTooltipFlower.position_x > 80}
+                onTooltipMouseEnter={cancelHideTooltip}
+                onTooltipMouseLeave={requestHideTooltip}
+              />
+            </g>
+          )}
         </g>
 
         {/* State overlays */}
-        {/* Task 7: only show idle hint if not yet grown */}
         {showIdleHint && (
           <g>
             <text x="50%" y="35%" textAnchor="middle" style={{ fill: textOverlayColor, fontSize: 14, fontFamily: 'Inter, sans-serif' }}>
