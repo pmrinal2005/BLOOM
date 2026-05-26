@@ -13,7 +13,7 @@
 [![Tailwind 4.x](https://img.shields.io/badge/Tailwind-4.x-06b6d4.svg?style=flat&logo=tailwindcss&logoColor=white)](#)
 [![Lucide React](https://img.shields.io/badge/Icons-Lucide_React-pink.svg?style=flat)](#)
 [![Supabase Backend](https://img.shields.io/badge/Supabase-Backend-3ecf8e.svg?style=flat&logo=supabase&logoColor=white)](#)
-
+[![Vercel](https://img.shields.io/badge/Deployment-Vercel-black.svg?style=flat&logo=vercel&logoColor=white)](#)
 
 <img width="1365" height="634" alt="img1" src="https://github.com/user-attachments/assets/a3dc2d4b-ce6b-42a9-9682-ff1bcffe21a4" />
 
