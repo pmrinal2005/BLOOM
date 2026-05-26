@@ -11,6 +11,7 @@
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-4caf50.svg?style=flat)](#)
 
 
+
 ## The Creative Revolution Has Bloomed
 
 Meet BLOOM, the ultimate playground for individual creators, solo inventors, and visionary thinkers who are tired of standard, boring AI responses. BLOOM is an organic digital conservatory designed to smash together completely unrelated worlds, text, and images to grow ideas that have never existed on this planet before.
@@ -201,7 +202,7 @@ You should see an output like:
   ➜  Network: use --host to expose
 ```
 
-Open [http://localhost:5173](http://localhost:5173) in your browser. You'll land on the BLOOM landing page — click **Enter the Lab** to navigate to `/dashboard` and start planting sparks. 🌱
+Open [http://localhost:5173](http://localhost:5173) in your browser. You'll land on the BLOOM landing page then click **Enter the Lab** to navigate to `/dashboard` and start planting sparks. 🌱
 
 ---
 
@@ -233,14 +234,17 @@ Open [http://localhost:5173](http://localhost:5173) in your browser. You'll land
 | **Backend** | Supabase (`@supabase/supabase-js`) — Postgres + Auth + Storage |
 | **Deployment** | Vercel / any static host |
 
+
+
 ---
 
 ## 📄 License
 
-Distributed under the MIT License. See the [LICENSE](LICENSE) file for the full text.
+Distributed under the **MIT License**. 
 
-> **MIT License** — feel free to fork, remix, cross-pollinate, and build something the world has never seen! 🚀
+> 🌸 **MIT License** — feel free to fork, remix, cross-pollinate, and build something the world has never seen! 🚀
 
+See the [LICENSE](./LICENSE) file for the full legal text.
 ---
 ## 💬 Acknowledgements
 
@@ -248,15 +252,17 @@ Distributed under the MIT License. See the [LICENSE](LICENSE) file for the full 
 *   **Supabase** for effortless backend persistence
 *   **The open-source community** — React, Vite, Tailwind, Zustand, Framer Motion, Lucide
 *   **Every creator** who refuses to settle for templated thinking 🌸
+
 ---
-# BLOOM
+
+🌐 Project Links
+* Launch the Lab: [Try Now](https://trybloomlabs.vercel.app/ "Go to BLOOM official site")  
+* Video Walkthrough: [Watch Now](https://youtu.be/2nzXjrcIF18?si=PWce5YJMGGDX_dct "Watch BLOOM Demo on Youtube")
+* Visit the [BLOOM Repository](https://github.com/pmrinal2005/bloom "Go to BLOOM GitHub").
+> Exposing neural routing architectures for cross-domain discovery.
+
+---
+## BLOOM
 
 ### 🌱 Plant a spark. Watch it bloom. 🌸
 > **Built for visionaries who grow beyond limits.**
-
-
----
-🌐 Project Links
-Live Deployment: trybloomlabs.vercel.app
-Video Walkthrough: coming soon
-Exposing neural routing architectures for cross-domain discovery.
