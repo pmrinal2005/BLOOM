@@ -124,33 +124,32 @@ Before you start, make sure you have the following installed:
 
 ---
 
-## 🚀 Getting Started & Local Setup
-
 ### A. Clone the Repository
 
 ```bash
-git clone [https://github.com/pmrinal2005/bloom.git](https://github.com/pmrinal2005/bloom.git)
+git clone https://github.com/pmrinal2005/bloom.git
 cd bloom
-
-### Install dependencies:
-   ```bash
-   npm install react@19 react-dom@19 typescript vite@7 vite-plugin-singlefile tailwindcss@4 tailwind-merge clsx zustand framer-motion lucide-react @google/genai @supabase/supabase-js
-
+```
+#### Install dependencies:
+```bash
+npm install react@19 react-dom@19 typescript vite@7 vite-plugin-singlefile tailwindcss@4 tailwind-merge clsx zustand framer-motion lucide-react @google/genai @supabase/supabase-js
+```
 
 ### B. Environment Configuration
 
 Create a `.env` file in the project root (next to `package.json`). You can copy the template using the command for your operating system:
 
-### Linux / macOS
+#### Linux / macOS
 ```bash
 cp .env.example .env
 ```
 
-### Windows (PowerShell)
+#### Windows (PowerShell)
 ```powershell
 Copy-Item .env.example .env
 ```
-### Windows (CMD)
+
+#### Windows (CMD)
 ```cmd
 copy .env.example .env
 ```
@@ -168,19 +167,19 @@ VITE_SUPABASE_ANON_KEY=sb_publishable_your_anon_key
 
 ### C. Install Dependencies
 
-BLOOM is a frontend-only application — there is no separate backend to set up. Just install the npm packages using your preferred package manager:
+BLOOM is a frontend-only application — there is no separate backend to set up. Install the npm packages using your preferred package manager:
 
-### Using npm (Linux / macOS / Windows)
+#### Using npm
 ```bash
 npm install
 ```
 
-### Using pnpm (Recommended for speed)
+#### Using pnpm (Recommended for speed)
 ```bash
 pnpm install
 ```
 
-### Using yarn
+#### Using yarn
 ```bash
 yarn install
 ```
@@ -193,7 +192,7 @@ Start the Vite development server:
 npm run dev
 ```
 
-You should see output like:
+You should see an output like:
 
 ```text
   VITE v7.x.x  ready in 412 ms
@@ -202,7 +201,9 @@ You should see output like:
   ➜  Network: use --host to expose
 ```
 
-Open [http://localhost:5173](http://localhost:5173) in your browser. You'll land on the BLOOM's landing page — click **Enter the Lab** to navigate to `/dashboard` and start planting sparks. 🌱
+Open [http://localhost:5173](http://localhost:5173) in your browser. You'll land on the BLOOM landing page — click **Enter the Lab** to navigate to `/dashboard` and start planting sparks. 🌱
+
+---
 
 ### E. Available Scripts
 
