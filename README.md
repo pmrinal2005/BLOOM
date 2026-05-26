@@ -1,5 +1,18 @@
 # BLOOM (In Beta-Phase)
+> **Grow beyond limits.** An organic digital conservatory where unrelated worlds collide, cross-pollinate, and bloom into radical, production-ready blueprints.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](#)
+[![React 19](https://img.shields.io/badge/React-19-20232a.svg?style=flat&logo=react&logoColor=61dafb)](#)
+[![TypeScript 5.x](https://img.shields.io/badge/TypeScript-5.x-3178c6.svg?style=flat&logo=typescript&logoColor=white)](#)
+[![Vite 7.x](https://img.shields.io/badge/Vite-7.x-646cff.svg?style=flat&logo=vite&logoColor=white)](#)
+[![Tailwind 4.x](https://img.shields.io/badge/Tailwind-4.x-06b6d4.svg?style=flat&logo=tailwindcss&logoColor=white)](#)
+[![Supabase Backend](https://img.shields.io/badge/Supabase-Backend-3ecf8e.svg?style=flat&logo=supabase&logoColor=white)](#)
+[![Google Gemma 4](https://img.shields.io/badge/Google-Gemma_4-4285f4.svg?style=flat&logo=google&logoColor=white)](#)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-4caf50.svg?style=flat)](#)
+
+
 ## The Creative Revolution Has Bloomed
+
 Meet BLOOM, the ultimate playground for individual creators, solo inventors, and visionary thinkers who are tired of standard, boring AI responses. BLOOM is an organic digital conservatory designed to smash together completely unrelated worlds, text, and images to grow ideas that have never existed on this planet before.
 Instead of typing standard prompts into a corporate chat box, BLOOM lets you plant conflicting inputs to watch them mutate, cross-pollinate, and explode into radical, production-ready blueprints.
 
@@ -30,38 +43,218 @@ BLOOM is built *on* and *for* the specific sparse architecture outlined in the l
 
 ---
 
-## 🛠️ Tech Stack & Implementation Details
+## 🏗️ Architecture & Repository Structure
+BLOOM is a single-page React + TypeScript application powered by Vite. The frontend talks directly to Google Gemma 4 for multi-modal generation and persists snapshots, interactions, and uploads to Supabase.
 
-* **Frontend Framework:** Next.js (React) with Tailwind CSS
-* **Aesthetics:** Futuristic dark-mode, neon-glassmorphism accents, and adaptive light-mode states
-* **API Framework:** Google AI Studio SDK (Accessing `google/gemma-4-26b-a4b-it`)
-* **Visualization Layer:** Responsive SVG/HTML interactive canvas mapping nodes (flowers) and attributes (petals)
+<details>
+<summary><b>View Directory Structure</b></summary>
+
+```text
+bloom/
+├── public/
+│   └── images/                    # Static assets (logo.png, orb.png)
+├── src/
+│   ├── components/
+│   │   ├── Canvas/                # Interactive SVG concept garden
+│   │   │   ├── Canvas.tsx         # Main canvas: pan, zoom, drag-connect, tooltips
+│   │   │   ├── CentralOrb.tsx     # The "Core Soul" orb (Gemma 4 anchor)
+│   │   │   ├── FlowerNode.tsx     # Animated flower + petal renderer
+│   │   │   └── VineConnection.tsx # Bezier vine connections with energy particles
+│   │   ├── HarvestPanel/          # Bottom drawer of harvest insight cards
+│   │   │   ├── HarvestPanel.tsx
+│   │   │   └── ShareModal.tsx
+│   │   ├── Landing/               # Marketing landing page
+│   │   │   └── LandingPage.tsx
+│   │   ├── RightPanel/            # Reasoning stream + model controls
+│   │   │   ├── RightPanel.tsx
+│   │   │   ├── ReasoningStream.tsx
+│   │   │   └── ModelControls.tsx
+│   │   ├── Header.tsx             # Top bar: mode, creativity, theme, online status
+│   │   ├── LeftPanel.tsx          # Input matrices (problem + inspirations)
+│   │   └── StartGrowthButton.tsx
+│   ├── lib/
+│   │   └── supabase.ts            # Supabase client + persistence helpers
+│   ├── services/
+│   │   └── ai.ts                  # Gemma 4 orchestration, prompt building, JSON parsing
+│   ├── store/
+│   │   └── useStore.ts            # Zustand global state
+│   ├── utils/
+│   │   ├── layout.ts              # Flower ring positioning + bezier paths
+│   │   └── cn.ts                  # Tailwind class merge helper
+│   ├── App.tsx                    # Root router + generation orchestrator
+│   ├── main.tsx                   # Entry point
+│   ├── index.css                  # Global styles + theme variables + animations
+│   └── vite-env.d.ts
+├── .env                           # API keys (gitignored)
+├── vercel.json                    # SPA rewrites for /home, /dashboard
+├── vite.config.ts                 # Vite + Tailwind + React + single-file bundling
+├── tsconfig.json
+└── package.json
+
+```
+
+</details>
 
 ---
 
-## 🚀 Getting Started
+### Major Directories
 
-### Prerequisites
-- Node.js 18+
-- A Google AI Studio API Key
+| Directory | Purpose |
+|---|---|
+| **`src/components/Canvas/`** | The heart of BLOOM — an SVG-based interactive garden with pan/zoom, drag-to-connect synaptic grafting, hover tooltips, and animated flower swaying. |
+| **`src/components/RightPanel/`** | The Core Observatory — live streaming of the model's reasoning chain with anti-loop sanitization, plus fine-grained model parameter sliders. |
+| **`src/components/HarvestPanel/`** | The Innovation Harvest — categorized blueprint cards (Core Insights, Future Scenarios, Flow Analysis, Generated Artifacts). |
+| **`src/services/ai.ts`** | All Gemma 4 orchestration: multi-modal payload building, system instruction generation, JSON extraction & repair, connection rule enforcement. |
+| **`src/lib/supabase.ts`** | Garden snapshot persistence, upload metadata, interaction event logging. |
+| **`src/store/useStore.ts`** | Single Zustand store with the full application state graph. |
 
-### Installation
+---
 
-1. Clone the repository:
-   ```bash
-   git clone [https://github.com/pmrinal2005/bloom.git](https://github.com/pmrinal2005/bloom.git)
-   cd bloom
-2. Install dependencies:
-   ```bash
-   npm install
-3. Install dependencies:
-   ```bash
-   GOOGLE_AI_STUDIO_API_KEY=your_api_key_here
-4. Run the development server:
-   ```bash
-   npm run dev
-5. Open http://localhost:5173 with your browser to enter the lab.
+## ✅ Prerequisites
 
+Before you start, make sure you have the following installed:
+
+| Tool | Minimum Version | Purpose |
+|---|---|---|
+| [**Node.js**](https://nodejs.org/) | `v18.0+` (LTS recommended) | JavaScript runtime |
+| [**npm**](https://www.npmjs.com/) / [**pnpm**](https://pnpm.io/) / [**yarn**](https://yarnpkg.com/) | latest | Package manager |
+| [**Git**](https://git-scm.com/) | `v2.30+` | Version control |
+| [**Google AI API Key**](https://aistudio.google.com/app/apikey) | — | For Gemma 4 generation |
+| [**Supabase Account**](https://supabase.com/) | — | *(Optional)* For persistence |
+
+---
+
+## 🚀 Getting Started & Local Setup
+
+### A. Clone the Repository
+
+```bash
+git clone [https://github.com/pmrinal2005/bloom.git](https://github.com/pmrinal2005/bloom.git)
+cd bloom
+
+### Install dependencies:
+   ```bash
+   npm install react@19 react-dom@19 typescript vite@7 vite-plugin-singlefile tailwindcss@4 tailwind-merge clsx zustand framer-motion lucide-react @google/genai @supabase/supabase-js
+
+
+### B. Environment Configuration
+
+Create a `.env` file in the project root (next to `package.json`). You can copy the template using the command for your operating system:
+
+### Linux / macOS
+```bash
+cp .env.example .env
+```
+
+### Windows (PowerShell)
+```powershell
+Copy-Item .env.example .env
+```
+### Windows (CMD)
+```cmd
+copy .env.example .env
+```
+
+Then open the `.env` file and fill in your credentials:
+
+```env
+# Required — Google AI Studio API key for Gemma 4
+VITE_GOOGLE_AI_API_KEY=your-google-ai-key-here
+
+# Supabase project 
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=sb_publishable_your_anon_key
+```
+
+### C. Install Dependencies
+
+BLOOM is a frontend-only application — there is no separate backend to set up. Just install the npm packages using your preferred package manager:
+
+### Using npm (Linux / macOS / Windows)
+```bash
+npm install
+```
+
+### Using pnpm (Recommended for speed)
+```bash
+pnpm install
+```
+
+### Using yarn
+```bash
+yarn install
+```
+
+### D. Run the Application Locally
+
+Start the Vite development server:
+
+```bash
+npm run dev
+```
+
+You should see output like:
+
+```text
+  VITE v7.x.x  ready in 412 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+```
+
+Open [http://localhost:5173](http://localhost:5173) in your browser. You'll land on the BLOOM's landing page — click **Enter the Lab** to navigate to `/dashboard` and start planting sparks. 🌱
+
+### E. Available Scripts
+
+
+| Command | Description |
+| :--- | :--- |
+| `npm run dev` | Start the Vite development server with HMR |
+| `npm run build` | Type-check and build production assets |
+| `npm run preview` | Preview the production build locally |
+| `npm run lint` | Run ESLint over the codebase (if configured) |
+
+
+---
+
+## 🛠️ Tech Stack & Implementation Details
+
+
+| Layer | Technology |
+| :--- | :--- |
+| **Framework** | React 19 + TypeScript |
+| **Build Tool** | Vite 7 + vite-plugin-singlefile |
+| **Styling** | Tailwind CSS 4 + tailwind-merge + clsx |
+| **State** | Zustand |
+| **Animation** | Framer Motion + native SVG/CSS animations |
+| **Icons** | Lucide React |
+| **AI Engine** | Google Gemma 4 (`@google/genai`) — multi-modal text + vision |
+| **Backend** | Supabase (`@supabase/supabase-js`) — Postgres + Auth + Storage |
+| **Deployment** | Vercel / any static host |
+
+---
+
+## 📄 License
+
+Distributed under the MIT License. See the [LICENSE](LICENSE) file for the full text.
+
+> **MIT License** — feel free to fork, remix, cross-pollinate, and build something the world has never seen! 🚀
+
+---
+## 💬 Acknowledgements
+
+*   **Google AI Studio** for the Gemma 4 multi-modal engine
+*   **Supabase** for effortless backend persistence
+*   **The open-source community** — React, Vite, Tailwind, Zustand, Framer Motion, Lucide
+*   **Every creator** who refuses to settle for templated thinking 🌸
+---
+# BLOOM
+
+### 🌱 Plant a spark. Watch it bloom. 🌸
+> **Built for visionaries who grow beyond limits.**
+
+
+---
 🌐 Project Links
 Live Deployment: trybloomlabs.vercel.app
 Video Walkthrough: coming soon
