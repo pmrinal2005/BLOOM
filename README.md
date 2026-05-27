@@ -3,17 +3,17 @@
 # BLOOM - _grow beyond limits_
 > An organic digital conservatory where unrelated worlds collide, cross-pollinate, and bloom into radical, production-ready blueprints.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](#)
-[![Google Gemma 4](https://img.shields.io/badge/Google-Gemma_4-4285f4.svg?style=flat&logo=google&logoColor=white)](#)
-[![React 19](https://img.shields.io/badge/React-19-20232a.svg?style=flat&logo=react&logoColor=61dafb)](#)
-[![TypeScript 5.x](https://img.shields.io/badge/TypeScript-5.x-3178c6.svg?style=flat&logo=typescript&logoColor=white)](#)
-[![Vite 7.x](https://img.shields.io/badge/Vite-7.x-646cff.svg?style=flat&logo=vite&logoColor=white)](#)
-[![Framer Motion](https://img.shields.io/badge/Framer_Motion-purple?style=flat&logo=framer&logoColor=white)](#)
-[![Zustand](https://img.shields.io/badge/State-Zustand-orange.svg?style=flat&logo=react&logoColor=white)](#)
-[![Tailwind 4.x](https://img.shields.io/badge/Tailwind-4.x-06b6d4.svg?style=flat&logo=tailwindcss&logoColor=white)](#)
-[![Lucide React](https://img.shields.io/badge/Icons-Lucide_React-pink.svg?style=flat)](#)
-[![Supabase Backend](https://img.shields.io/badge/Supabase-Backend-3ecf8e.svg?style=flat&logo=supabase&logoColor=white)](#)
-[![Vercel](https://img.shields.io/badge/Deployment-Vercel-black.svg?style=flat&logo=vercel&logoColor=white)](#)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Google Gemma 4](https://img.shields.io/badge/Google-Gemma_4-4285f4.svg?style=flat&logo=google&logoColor=white)](https://ai.google.dev/gemma)
+[![React 19](https://img.shields.io/badge/React-19-20232a.svg?style=flat&logo=react&logoColor=61dafb)](https://react.dev)
+[![TypeScript 5.x](https://img.shields.io/badge/TypeScript-5.x-3178c6.svg?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![Vite 7.x](https://img.shields.io/badge/Vite-7.x-646cff.svg?style=flat&logo=vite&logoColor=white)](https://vite.dev)
+[![Framer Motion](https://img.shields.io/badge/Framer_Motion-purple?style=flat&logo=framer&logoColor=white)](https://motion.dev)
+[![Zustand](https://img.shields.io/badge/State-Zustand-orange.svg?style=flat&logo=react&logoColor=white)](https://zustand-demo.pmnd.rs)
+[![Tailwind 4.x](https://img.shields.io/badge/Tailwind-4.x-06b6d4.svg?style=flat&logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
+[![Lucide React](https://img.shields.io/badge/Icons-Lucide_React-pink.svg?style=flat)](https://lucide.dev)
+[![Supabase Backend](https://img.shields.io/badge/Supabase-Backend-3ecf8e.svg?style=flat&logo=supabase&logoColor=white)](https://supabase.com)
+[![Vercel](https://img.shields.io/badge/Deployment-Vercel-black.svg?style=flat&logo=vercel&logoColor=white)](https://vercel.com)
 
 <img width="1365" height="634" alt="img1" src="https://github.com/user-attachments/assets/a3dc2d4b-ce6b-42a9-9682-ff1bcffe21a4" />
 
