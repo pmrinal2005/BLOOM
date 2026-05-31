@@ -278,7 +278,9 @@ Distributed under the **MIT License**.
 ---
 
 🌐 Project Links
-* 🌸 Launch the Lab: [Try Now](https://trybloomlabs.vercel.app/ "Go to BLOOM official site")  
+* 🌸 Launch the Lab: [Try Now](https://trybloomlabs.vercel.app/ "Go to BLOOM official site")
+> NOTE:
+> Please allow 1 to 4 minutes for the engine to analyze your problem matrices, sprout its reasoning and cultivate your breakthrough. Hang tight to see the magic bloom! Thank you for your patience!
 * 🌸 Video Walkthrough: [Watch Now](https://youtu.be/2nzXjrcIF18?si=PWce5YJMGGDX_dct "Watch BLOOM Demo on Youtube")
 * 🌸 Visit the [BLOOM Repository](https://github.com/pmrinal2005/bloom "Go to BLOOM GitHub").
 > Exposing neural routing architectures for cross-domain discovery.
