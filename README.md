@@ -188,6 +188,269 @@ VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=sb_publishable_your_anon_key
 ```
 
+Put this code into your Supabase SQL Editor: 
+```
+-- This is the complete schema with one optional additive column.
+
+-- Enable UUID extension
+create extension if not exists "pgcrypto";
+
+-- ── Projects ──
+create table if not exists projects (
+  id                  text primary key,
+  name                text not null default 'Untitled Garden',
+  problem_description text,
+  growth_mode         text not null default 'Focused'
+                        check (growth_mode in ('Focused','Divergent')),
+  creativity_level    float not null default 0.7
+                        check (creativity_level between 0 and 1),
+  is_archived         boolean not null default false,
+  created_at          timestamptz not null default now(),
+  updated_at          timestamptz not null default now()
+);
+
+-- ── Uploads ──
+create table if not exists uploads (
+  id            text primary key,
+  project_id    text not null references projects(id) on delete cascade,
+  file_url      text not null,
+  file_type     text not null check (file_type in ('image','video')),
+  thumbnail_url text,
+  description   text,
+  slot          text,
+  created_at    timestamptz not null default now()
+);
+
+-- ── Garden Snapshots ──
+create table if not exists garden_snapshots (
+  id               text primary key default gen_random_uuid()::text,
+  project_id       text not null references projects(id) on delete cascade,
+  generation_index integer not null default 1,
+  trigger_type     text not null default 'auto',
+  is_current       boolean not null default true,
+  created_at       timestamptz not null default now()
+);
+
+create index if not exists idx_snapshots_project_current
+  on garden_snapshots(project_id, is_current);
+
+-- ── Flowers ──
+create table if not exists flowers (
+  id           text primary key,
+  snapshot_id  text not null references garden_snapshots(id) on delete cascade,
+  project_id   text not null references projects(id) on delete cascade,
+  flower_label text not null,
+  entity_name  text not null,
+  position_x   float not null default 0,
+  position_y   float not null default 0,
+  color_theme  text not null default 'cyan'
+                 check (color_theme in ('cyan','green','pink','orange','blue','purple','yellow')),
+  ring         integer not null default 0,
+  created_at   timestamptz not null default now()
+);
+
+create index if not exists idx_flowers_snapshot on flowers(snapshot_id);
+create index if not exists idx_flowers_project  on flowers(project_id);
+
+-- ── Petals ──
+create table if not exists petals (
+  id              text primary key,
+  flower_id       text not null references flowers(id) on delete cascade,
+  project_id      text not null references projects(id) on delete cascade,
+  petal_label     text not null,
+  sub_entity_name text not null,
+  description     text,
+  angle           float,
+  created_at      timestamptz not null default now()
+);
+
+create index if not exists idx_petals_flower  on petals(flower_id);
+create index if not exists idx_petals_project on petals(project_id);
+
+-- ── Connections ──
+create table if not exists connections (
+  id                       text primary key,
+  snapshot_id              text not null references garden_snapshots(id) on delete cascade,
+  project_id               text not null references projects(id) on delete cascade,
+  source_type              text not null check (source_type in ('orb','flower')),
+  source_id                text not null,
+  target_type              text not null default 'flower',
+  target_id                text not null,
+  relationship_description text,
+  is_manual                boolean not null default false,
+  created_at               timestamptz not null default now()
+);
+
+create index if not exists idx_connections_snapshot on connections(snapshot_id);
+create index if not exists idx_connections_project  on connections(project_id);
+
+-- ── Reasoning Logs ──
+create table if not exists reasoning_logs (
+  id                  text primary key,
+  snapshot_id         text not null references garden_snapshots(id) on delete cascade,
+  project_id          text not null references projects(id) on delete cascade,
+  step_number         integer not null,
+  text_content        text not null,
+  highlighted_phrases text[] not null default '{}',
+  created_at          timestamptz not null default now()
+);
+
+create index if not exists idx_reasoning_snapshot on reasoning_logs(snapshot_id);
+
+-- ── Harvest Results ──
+create table if not exists harvest_results (
+  id          text primary key,
+  snapshot_id text not null references garden_snapshots(id) on delete cascade,
+  project_id  text not null references projects(id) on delete cascade,
+  tab_type    text not null check (tab_type in (
+                'Core Insights','Generated Artifacts','Future Scenarios','Flow Analysis'
+              )),
+  title       text not null,
+  summary     text not null,
+  content     jsonb not null default '{"paragraphs":[],"key_points":[]}',
+  created_at  timestamptz not null default now()
+);
+
+create index if not exists idx_harvest_snapshot on harvest_results(snapshot_id);
+create index if not exists idx_harvest_project  on harvest_results(project_id);
+
+-- ── Model Parameter Snapshots ──
+-- Optional: add has_vision_input for analytics tracking
+create table if not exists model_param_snapshots (
+  id                text primary key default gen_random_uuid()::text,
+  snapshot_id       text not null references garden_snapshots(id) on delete cascade,
+  project_id        text not null references projects(id) on delete cascade,
+  temperature       float not null,
+  top_p             float not null,
+  top_k             integer not null,
+  presence_penalty  float not null,
+  frequency_penalty float not null,
+  -- Optional analytics column (additive, safe to add to existing schema):
+  has_vision_input  boolean not null default false,
+  created_at        timestamptz not null default now()
+);
+
+-- ── Interaction Events ──
+create table if not exists interaction_events (
+  id          text primary key default gen_random_uuid()::text,
+  project_id  text not null references projects(id) on delete cascade,
+  snapshot_id text references garden_snapshots(id) on delete set null,
+  event_type  text not null,
+  payload     jsonb not null default '{}',
+  created_at  timestamptz not null default now()
+);
+
+create index if not exists idx_events_project on interaction_events(project_id);
+
+-- ── Row-Level Security ──
+alter table projects              enable row level security;
+alter table uploads               enable row level security;
+alter table garden_snapshots      enable row level security;
+alter table flowers               enable row level security;
+alter table petals                enable row level security;
+alter table connections           enable row level security;
+alter table reasoning_logs        enable row level security;
+alter table harvest_results       enable row level security;
+alter table model_param_snapshots enable row level security;
+alter table interaction_events    enable row level security;
+
+-- ── RLS Policies ──
+do $$ begin
+  create policy "Allow all on projects"
+    on projects for all using (true) with check (true);
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "Allow all on uploads"
+    on uploads for all using (true) with check (true);
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "Allow all on garden_snapshots"
+    on garden_snapshots for all using (true) with check (true);
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "Allow all on flowers"
+    on flowers for all using (true) with check (true);
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "Allow all on petals"
+    on petals for all using (true) with check (true);
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "Allow all on connections"
+    on connections for all using (true) with check (true);
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "Allow all on reasoning_logs"
+    on reasoning_logs for all using (true) with check (true);
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "Allow all on harvest_results"
+    on harvest_results for all using (true) with check (true);
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "Allow all on model_param_snapshots"
+    on model_param_snapshots for all using (true) with check (true);
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create policy "Allow all on interaction_events"
+    on interaction_events for all using (true) with check (true);
+exception when duplicate_object then null;
+end $$;
+
+-- ── Trigger: mark other snapshots as non-current ──
+create or replace function set_current_snapshot()
+returns trigger language plpgsql as $$
+begin
+  update garden_snapshots
+     set is_current = false
+   where project_id = new.project_id
+     and id <> new.id;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_current_snapshot on garden_snapshots;
+create trigger trg_current_snapshot
+  after insert on garden_snapshots
+  for each row execute function set_current_snapshot();
+
+-- ── Trigger: auto-update projects.updated_at ──
+create or replace function touch_project()
+returns trigger language plpgsql as $$
+begin
+  update projects set updated_at = now() where id = new.project_id;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_touch_project_on_snapshot on garden_snapshots;
+create trigger trg_touch_project_on_snapshot
+  after insert on garden_snapshots
+  for each row execute function touch_project();
+
+-- ── If upgrading existing schema: safely add has_vision_input column ──
+-- Run this separately if you already have the table:
+-- alter table model_param_snapshots add column if not exists has_vision_input boolean not null default false;
+```
+
 ### C. Install Dependencies
 
 BLOOM is a frontend-only application — there is no separate backend to set up. Install the npm packages using your preferred package manager:
